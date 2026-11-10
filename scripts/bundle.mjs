@@ -1,0 +1,16 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
+const file = new URL('../index.ts',import.meta.url);
+const dist = await readFile(file,'utf8');
+const marker = '/**\n * TriFlow API;';
+const start = dist.indexOf(marker);
+const match = /const assets=JSON\.parse\(gunzipSync\(Buffer\.from\('([^']+)','base64'\)\)\.toString\('utf8'\)\);/.exec(dist);
+if(start<0 || !match || start>=match.index) throw new Error('Distribution markers missing');
+const names=['index.html','styles.css','app.js','audio-worklet.js','favicon.svg','manifest.webmanifest','sw.js'];
+const assets={};
+for(const name of names) assets['/'+name]=await readFile(new URL('../public/'+name,import.meta.url),'utf8');
+const packed=gzipSync(Buffer.from(JSON.stringify(assets),'utf8'),{level:9}).toString('base64');
+const handler=(await readFile(new URL('../src/handler.mjs',import.meta.url),'utf8')).replace('export function createHandler(', 'function createHandler(');
+const compiled=dist.slice(0,start)+handler+match[0].replace(match[1],packed)+dist.slice(match.index+match[0].length);
+await writeFile(file,compiled,'utf8');
+console.log('Built index.ts from modular source and',names.length,'assets');
