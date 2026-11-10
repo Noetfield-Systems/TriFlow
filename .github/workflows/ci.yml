@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 jobs:
-  smoke:
+  full-stack:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,18 +16,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test tests/*.test.mjs
-      - run: node scripts/unpack.mjs
-      - run: node scripts/bundle.mjs
-      - name: Verify distribution roundtrip
+      - name: Validate editable source
+        run: |
+          node --check public/app.js
+          node --check public/audio-worklet.js
+          node --check src/handler.mjs
+      - name: Generate complete deployable Bun function
+        run: node scripts/bundle.mjs
+      - name: Test backend, client bundle and web routes
+        run: node --test tests/*.test.mjs
+      - name: Enforce generated bundle on pull requests
+        if: github.event_name == 'pull_request'
         run: git diff --exit-code -- index.ts
-      - name: Publish editable source files
+      - name: Publish tested distribution on main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src public
+          git add index.ts
           if ! git diff --cached --quiet; then
-            git commit -m "chore: publish editable TriFlow source [skip ci]"
+            git commit -m "build: sync tested TriFlow distribution [skip ci]"
             git push
           fi
