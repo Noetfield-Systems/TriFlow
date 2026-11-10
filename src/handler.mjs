@@ -65,6 +65,7 @@ export function createHandler({env=process.env,assets={},fetchImpl=fetch,nowFn=D
         const provider=await fetchImpl('https://api.deepgram.com/v1/auth/grant',{method:'POST',headers:{Authorization:`Token ${env.DEEPGRAM_API_KEY}`},signal:AbortSignal.timeout(10000)});
         if(!provider.ok) return json({error:'SPEECH_PROVIDER_UNAVAILABLE'},502);
         const data=await provider.json();
+        if(typeof data?.access_token!=='string'||data.access_token.length<8)return json({error:'SPEECH_PROVIDER_INVALID_RESPONSE'},502);
         return json({access_token:data.access_token,expires_in:data.expires_in||30});
       }
       if(path==='/api/turn') {
