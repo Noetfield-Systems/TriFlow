@@ -43,3 +43,9 @@ The free Web Speech API mode requires manual language selection and must not be 
 `node --test tests/*.test.mjs` (Bun required) checks that the server serves assets, issues a session without invite, guards provider endpoints, exposes truthful configuration, and supplies legal pages. A real-provider acceptance test must be performed with the provider's credentials and microphone access.
 
 TriFlow is independent from SourceB. No customer data is shared between them.
+
+## November 2026 acceptance evidence
+- Live Railway streaming proxy reached Deepgram using server-side API-key headers; no browser API credential was exposed.
+- Live OpenAI translation returned a meaningful response for a mixed English/Spanish/French text sentence.
+- Synthetic mixed-language audio remains a known recognition-quality gap: OpenAI transcribed multiple segments, while Deepgram Nova-3 returned only the English portion in this test. Synthetic TTS is not representative of a natural human voice; a human multilingual microphone acceptance test is still required before claiming complete code-switching reliability.
+- GitHub CI includes browser QA for 1440 px desktop and 390 px mobile, signed API contracts and an opt-in live provider test marked [voice-e2e].

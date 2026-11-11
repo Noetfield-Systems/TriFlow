@@ -34,6 +34,7 @@ async function run(name,viewport){
  await page.locator('#typedInput').fill('I think que podemos parler demain');
  await page.locator('#sendTyped').click();
  await page.waitForFunction(()=>document.querySelector('#conversationFeed')?.textContent.includes('Podemos hablar mañana'),null,{timeout:12000});
+ await page.waitForTimeout(4400); // Capture the stable premium UI rather than a transient toast.
  await page.screenshot({path:'qa-screenshots/'+name+'.png',fullPage:true,animations:'disabled'});
  const width=await page.evaluate(()=>({document:document.documentElement.scrollWidth,screen:window.innerWidth}));
  assert.ok(width.document<=width.screen+8,name+' horizontal overflow '+JSON.stringify(width));
