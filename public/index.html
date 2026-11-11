@@ -11,13 +11,13 @@
  <nav class="nav"><button class="nav-item selected" data-view="live"><span class="nav-icon">◉</span> Live studio <span class="nav-dot"></span></button><button class="nav-item" data-view="history"><span class="nav-icon">◷</span> Sessions</button><button class="nav-item" data-view="phrases"><span class="nav-icon">▤</span> Saved phrases</button></nav>
  <div class="sidebar-section-label spacer-label">YOUR LANGUAGES</div>
  <div class="sidebar-languages" id="sidebarLanguages"></div>
- <button class="add-languages" id="editLanguages">✳ &nbsp; Customize languages</button>
+ <button class="add-languages" id="editLanguages">✳ &nbsp; Customize languages</button><button class="add-languages flow-sidebar-link" id="flowHelpSidebar" type="button">✧ &nbsp; Help & feedback</button>
  <div class="sidebar-grow"></div>
  <div class="sidebar-card"><div class="sidebar-card-icon">✦</div><strong>One thought. Three languages.</strong><p>Switch mid-sentence. Keep the conversation flowing.</p></div>
  <div class="sidebar-foot"><span class="small-pulse" id="providerIndicator"></span><span id="providerLabel">Checking your studio</span></div>
 </aside>
 <main class="main">
- <header class="topbar"><div class="breadcrumbs"><span>WORKSPACE</span><span class="slash">/</span><strong id="viewBreadcrumb">LIVE STUDIO</strong></div><div class="top-actions"><span class="private-badge"><span>◆</span> YOUR WORDS. YOUR WORLD.</span><button class="icon-button" id="settingsButton" aria-label="Open settings" title="Settings">⚙</button><button class="avatar" id="aboutButton" title="About TriFlow" aria-label="About">T</button></div></header>
+ <header class="topbar"><div class="breadcrumbs"><span>WORKSPACE</span><span class="slash">/</span><strong id="viewBreadcrumb">LIVE STUDIO</strong></div><div class="top-actions"><span class="private-badge"><span>◆</span> YOUR WORDS. YOUR WORLD.</span><button class="flow-help-top" id="flowHelpTop" type="button" aria-label="Open Flow assistant">✦ <span>Ask Flow</span></button><button class="icon-button" id="settingsButton" aria-label="Open settings" title="Settings">⚙</button><button class="avatar" id="aboutButton" title="About TriFlow" aria-label="About">T</button></div></header>
  <div class="main-inner">
   <section class="view" id="liveView">
    <div class="eyebrow"><span class="eyebrow-line"></span> THE FUTURE OF HUMAN CONNECTION <span class="eyebrow-spark">✦</span></div>
@@ -33,6 +33,16 @@
        <button class="mic-button" id="micButton" aria-label="Start microphone session"><span id="micIcon">♬</span></button>
        <div class="voice-status" id="voiceStatus">Tap to begin your flow</div><p class="voice-hint" id="voiceHint">Change languages whenever you like. Full automatic switching requires the multilingual voice engine.</p>
        <div class="free-language-controls" id="freeLanguageControls" hidden></div><div class="session-timer" id="sessionTimer">00:00</div><div class="voice-provider"><span class="provider-light"></span> <span id="voiceProviderDescription">Checking voice engine…</span></div>
+     </div>
+
+     <div class="studio-voice-panel" id="studioVoicePanel">
+       <div class="studio-voice-intro"><span class="studio-voice-sigil">♫</span><div><strong>Make the voice yours.</strong><small>Choose a natural companion. Listen before you speak.</small></div><span class="studio-voice-note" id="voiceAvailability">Free device voices</span></div>
+       <div class="studio-voice-options">
+         <label class="studio-field">VOICE EXPERIENCE<select id="voiceEngine" aria-label="Voice quality"><option value="device">Device · Free</option><option value="studio">Studio · Neural</option></select></label>
+         <label class="studio-field">COMPANION VOICE<select id="voicePersona" aria-label="Voice personality"><option value="system">System voice</option></select></label>
+         <button class="voice-audition" id="previewStudioVoice" type="button">▶ <span>Preview voice</span></button>
+       </div>
+       <div class="studio-voice-caption" id="studioVoiceCaption">Free playback uses the voices installed on your device.</div>
      </div>
      <div class="card-bottom"><div class="mode-row"><span class="setting-mini">CONVERSATION MODE</span><div class="segment" role="group" aria-label="Conversation mode"><button class="segment-btn selected" data-mode="conversation">Chat</button><button class="segment-btn" data-mode="interpreter">Translate</button><button class="segment-btn" data-mode="coach">Coach</button></div></div><div class="tip-line"><span>✧</span><span id="modeHint">Your AI companion replies naturally in your language.</span></div></div>
     </section>
@@ -52,6 +62,39 @@
  </div>
 </main>
 </div>
+
+<div class="flow-backdrop" id="flowBackdrop" hidden></div>
+<aside class="flow-drawer" id="flowDrawer" role="dialog" aria-modal="true" aria-labelledby="flowDrawerTitle" hidden>
+ <div class="flow-drawer-header">
+  <div class="flow-mark">✦</div><div class="flow-head-copy"><span>YOUR LANGUAGE COMPANION</span><h2 id="flowDrawerTitle">Meet Flow.</h2><p>Get help, shape TriFlow, and make every session feel yours.</p></div>
+  <button class="flow-close" id="flowClose" type="button" aria-label="Close assistant">×</button>
+ </div>
+ <div class="flow-tabs" role="tablist" aria-label="Flow sections">
+  <button class="flow-tab active" data-flow-tab="assistant" role="tab" aria-selected="true">✦ Ask Flow</button>
+  <button class="flow-tab" data-flow-tab="feedback" role="tab" aria-selected="false">♡ Feedback</button>
+ </div>
+ <section class="flow-tab-pane" id="flowAssistantPane">
+  <div class="flow-conversation" id="flowConversation" aria-live="polite">
+   <div class="flow-msg ai"><span class="flow-msg-icon">✦</span><p>Hi! I’m Flow, your language companion. I can guide you through your first three-language conversation, help with your microphone, or find a voice you love.</p></div>
+  </div>
+  <div class="flow-chips" id="flowChips"><button type="button" data-flow-prompt="How do I speak in three languages without switching settings?">Three-language flow</button><button type="button" data-flow-prompt="Help me set up the microphone.">Microphone setup</button><button type="button" data-flow-prompt="Which voice should I try?">Pick my voice</button></div>
+  <form class="flow-compose" id="flowForm"><label for="flowInput" class="sr-only">Ask Flow</label><input id="flowInput" type="text" maxlength="550" placeholder="Ask anything about TriFlow…" autocomplete="off"/><button type="submit" aria-label="Send message to Flow">↗</button></form>
+  <p class="flow-privacy-note">Questions are processed by the AI provider only when you send them. Flow cannot access your private session or audio.</p>
+ </section>
+ <section class="flow-tab-pane" id="flowFeedbackPane" hidden>
+  <div class="flow-feedback-intro"><span>✧ MAKE THIS BETTER TOGETHER</span><h3>How did it feel?</h3><p>Tell us what worked or what interrupted your flow. Each note helps improve the experience.</p></div>
+  <form id="flowFeedbackForm" class="flow-feedback-form">
+   <label>YOUR EXPERIENCE</label><div class="flow-stars" id="flowStars" role="group" aria-label="Rate TriFlow from one to five"><button type="button" data-score="1" aria-label="1 star">☆</button><button type="button" data-score="2" aria-label="2 stars">☆</button><button type="button" data-score="3" aria-label="3 stars">☆</button><button type="button" data-score="4" aria-label="4 stars">☆</button><button type="button" data-score="5" aria-label="5 stars">☆</button></div>
+   <label for="flowFeedbackCategory">WHAT CAN WE IMPROVE?</label><select id="flowFeedbackCategory"><option value="voice">Voices & speaking</option><option value="translation">Translation accuracy</option><option value="usability">Ease of use</option><option value="bug">Something broke</option><option value="idea">I have an idea</option><option value="other">Something else</option></select>
+   <label for="flowFeedbackMessage">YOUR NOTE</label><textarea id="flowFeedbackMessage" maxlength="1200" minlength="8" rows="4" required placeholder="Tell us what you wanted to happen and what actually happened…"></textarea>
+   <label for="flowFeedbackAlias">YOUR NAME <span>(optional)</span></label><input id="flowFeedbackAlias" maxlength="40" placeholder="A name we can recognize"/>
+   <button class="flow-submit-feedback" type="submit" id="flowFeedbackSubmit">Send feedback <span>↗</span></button>
+   <p class="flow-feedback-receipt" id="flowFeedbackStatus" role="status"></p>
+  </form>
+ </section>
+ <div class="flow-drawer-bottom"><label class="flow-consent"><input type="checkbox" id="flowUsageConsent"/><span><strong>Help improve TriFlow anonymously</strong><small>Share basic feature usage, never audio, transcript text, or help messages. Off until you enable it.</small></span></label><a href="/privacy" target="_blank" rel="noopener">Privacy details ↗</a></div>
+</aside>
+<button class="flow-floating-help" id="flowFloatingHelp" type="button" aria-label="Ask Flow assistant">✦ <span>Ask Flow</span></button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <dialog id="settingsDialog" class="dialog"><form method="dialog" class="settings-form" id="settingsForm"><div class="dialog-head"><div><span class="overline">PERSONALIZE YOUR EXPERIENCE</span><h2>Make it yours.</h2></div><button class="dialog-close" value="cancel" aria-label="Close">×</button></div><p class="dialog-desc">Choose your three languages. Free browser voice recognizes one chosen language at a time; the optional multilingual engine switches automatically, even mid-sentence.</p><div class="form-group"><label>YOUR THREE LANGUAGES</label><div class="language-selects"><select id="lang1" aria-label="First language"></select><select id="lang2" aria-label="Second language"></select><select id="lang3" aria-label="Third language"></select></div></div><div class="form-group"><label for="replyPreference">AI RESPONSE LANGUAGE</label><select id="replyPreference"><option value="auto">Follow my language automatically</option></select><p class="form-help">Select “auto” to follow the language you most recently used, even as you switch.</p></div><div class="form-group"><label for="speechEngine">MICROPHONE ENGINE</label><select id="speechEngine"><option value="auto">Smart default · free browser, or full multilingual if configured</option><option value="browser">Free browser microphone · switch language manually</option><option value="deepgram">Automatic three-language engine · requires provider</option></select><p class="form-help">Free mode requires no TriFlow API key or access code. Automatic switching inside one sentence requires a compatible multilingual provider.</p></div><div class="form-group"><label for="voiceSpeed">VOICE PLAYBACK SPEED</label><select id="voiceSpeed"><option value="0.82">Gentle · 0.82×</option><option value="0.96">Natural · 0.96×</option><option value="1.1">Brisk · 1.10×</option></select><p class="form-help">Reply audio uses free device speech synthesis, inspired by SourceB’s web voice patterns.</p></div><div class="form-group"><label class="toggle-line"><span><strong>Speak AI responses aloud</strong><small>Uses device speech synthesis. Voice availability varies by device.</small></span><input type="checkbox" id="speakReplies" checked/><i></i></label></div><div class="form-group"><label class="toggle-line"><span><strong>Live subtitle translation</strong><small>Translate partial speech while the sentence is still forming.</small></span><input type="checkbox" id="livePreviews" checked/><i></i></label></div><div class="dialog-actions"><button class="cancel-btn" value="cancel">Cancel</button><button class="primary-btn" id="saveSettings" value="save">Save preferences ↗</button></div></form></dialog>
 <dialog id="aboutDialog" class="dialog small-dialog"><div class="dialog-head"><div><span class="overline">BUILT AROUND YOUR VOICE</span><h2>Three languages. One flow.</h2></div><button class="dialog-close" id="aboutClose" aria-label="Close">×</button></div><p class="dialog-desc">TriFlow is a standalone voice studio: three languages in one microphone connection, live transcriptions, natural translations and expressive AI replies.</p><div class="about-facts"><div><strong>Private by default</strong><span>Transcript history stays in your browser unless you export it. Audio is processed by the configured speech provider during live sessions.</span></div><div><strong>Device voice, no extra voice bill</strong><span>Spoken replies use the free voices already available on your device. Quality and language coverage vary. SourceB’s chat technology uses Cloudflare Workers AI with a limited free allocation. Its Retell receptionist is metered and does not provide automatic three-language switching out of the box.</span></div><div><strong>No recording archive</strong><span>TriFlow does not record or store raw audio on its server.</span></div></div><button class="primary-btn about-done" id="aboutDone">Back to studio</button></dialog>
