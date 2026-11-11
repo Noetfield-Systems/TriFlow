@@ -62,9 +62,9 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq espeak ffmpeg
-          espeak -v en-us -s 135 -w /tmp/tf-en.wav 'I think'
-          espeak -v es -s 135 -w /tmp/tf-es.wav 'que podemos'
-          espeak -v fr -s 135 -w /tmp/tf-fr.wav 'parler demain'
+          espeak -v en-us -s 145 -w /tmp/tf-en.wav 'I was thinking maybe'
+          espeak -v es -s 145 -w /tmp/tf-es.wav 'podemos hablar un poco'
+          espeak -v fr -s 145 -w /tmp/tf-fr.wav 'pour organiser notre voyage demain'
           ffmpeg -hide_banner -loglevel error -y -i /tmp/tf-en.wav -i /tmp/tf-es.wav -i /tmp/tf-fr.wav -filter_complex '[0:a][1:a][2:a]concat=n=3:v=0:a=1,aresample=16000,aformat=sample_fmts=s16:channel_layouts=mono[out]' -map '[out]' -f s16le /tmp/triflow-mixed.pcm
       - name: Actual production speech + translation test (synthetic fixture)
         run: bun tests/live-voice-e2e.mjs
