@@ -6,7 +6,7 @@ const marker = '/**\n * TriFlow API;';
 const start = dist.indexOf(marker);
 const match = /const assets=JSON\.parse\(gunzipSync\(Buffer\.from\('([^']+)','base64'\)\)\.toString\('utf8'\)\);/.exec(dist);
 if(start<0 || !match || start>=match.index) throw new Error('Distribution markers missing');
-const names=['index.html','styles.css','app.js','audio-worklet.js','favicon.svg','manifest.webmanifest','sw.js'];
+const names=['index.html','styles.css','app.js','audio-worklet.js','favicon.svg','manifest.webmanifest','sw.js','admin.html','admin.js'];
 const assets={};
 for(const name of names) assets['/'+name]=await readFile(new URL('../public/'+name,import.meta.url),'utf8');
 const packed=gzipSync(Buffer.from(JSON.stringify(assets),'utf8'),{level:9}).toString('base64');
