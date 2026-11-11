@@ -30,7 +30,7 @@ jobs:
         timeout-minutes: 2
         run: node --test --test-force-exit --test-reporter=spec tests/*.test.mjs
       - name: Verify experience, feedback persistence and neural voice API
-        run: bun test tests/experience.bun.mjs
+        run: bun test tests/experience.test.ts
       - name: Install headless browser for UI E2E
         run: |
           npm install --no-save playwright

@@ -30,7 +30,7 @@ describe('TriFlow experience and feedback',()=>{
  });
  it('stores feedback but rejects invalid or too-short submissions',async()=>{
   const r=await s.handle(req('/api/feedback',{visitor:validId,category:'voice',rating:4,alias:'Monse',comment:'A little more emotion in French, please!',languages:['en','es','fr']}),{sessionReady:true});
-  expect(r.status).toBe(201);expect((await r.json()).receipt).toStartWith('TF-FB-');
+  expect(r.status).toBe(201);expect((await r.json()).receipt.startsWith('TF-FB-')).toBe(true);
   const bad=await s.handle(req('/api/feedback',{visitor:validId,category:'bug',comment:'bad'}),{sessionReady:true});
   expect(bad.status).toBe(400);
  });
