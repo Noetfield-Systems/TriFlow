@@ -52,8 +52,8 @@ function createHandler({env=process.env,assets={},fetchImpl=fetch,nowFn=Date.now
         if(content==null) return new Response('Not found',{status:404});
         return new Response(content,{headers:{'Content-Type':ASSET_MIME[path],'Cache-Control':path==='/index.html'?'no-cache':'public,max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','Permissions-Policy':'camera=(), geolocation=(), microphone=(self)','Content-Security-Policy':"default-src 'self'; connect-src 'self' https://api.deepgram.com wss://api.deepgram.com; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"}});
       }
-      if(req.method==='GET' && path==='/api/health') return json({ok:true,app:'triflow',version:'2.1.0',configured:canSpeech&&canAI});
-      if(req.method==='GET' && path==='/api/config') return json({speechReady:canSpeech,aiReady:canAI,accessCodeRequired:false,gateReady:true,product:'TriFlow',version:'2.1.0',maxSessionMinutes:15,providers:{speech:canSpeech?'deepgram-nova-3-multilingual':'browser-web-speech',language:canSourceBAI?'cloudflare-workers-ai-sourceb-pattern':canOpenAI?'openai-text':'browser-translation-when-available',voice:'browser-speech-synthesis',sourceBAIReady:canSourceBAI,retell:'optional-metered-not-connected'},billing:{deviceVoice:'free-device-capability',retell:'metered-not-free'}});
+      if(req.method==='GET' && path==='/api/health') return json({ok:true,app:'triflow',version:'2.4.0',configured:canAI&&(canSpeech||canOpenAI)});
+      if(req.method==='GET' && path==='/api/config') return json({speechReady:canSpeech,openAITranscribeReady:canOpenAI,aiReady:canAI,accessCodeRequired:false,gateReady:true,product:'TriFlow',version:'2.4.0',maxSessionMinutes:15,providers:{speech:canSpeech?'deepgram-nova-3-multilingual':canOpenAI?'openai-batched-transcribe':'browser-web-speech',language:canSourceBAI?'cloudflare-workers-ai-sourceb-pattern':canOpenAI?'openai-text':'browser-translation-when-available',voice:'browser-speech-synthesis',sourceBAIReady:canSourceBAI,retell:'optional-metered-not-connected'},billing:{deviceVoice:'free-device-capability',retell:'metered-not-free'}});
       if(path.startsWith('/api/') && req.method!=='POST') return json({error:'METHOD_NOT_ALLOWED'},405);
       if(path.startsWith('/api/') && !acceptedOrigin(req,env)) return json({error:'ORIGIN_MISMATCH'},403);
       const ip=ipOf(req);
@@ -69,10 +69,38 @@ function createHandler({env=process.env,assets={},fetchImpl=fetch,nowFn=Date.now
         if(!canSpeech) return json({error:'SPEECH_NOT_CONFIGURED'},503);
         if(!limit(`stt:${ip}`,8,3600000)) return json({error:'HOURLY_LIMIT_REACHED'},429);
         const provider=await fetchImpl('https://api.deepgram.com/v1/auth/grant',{method:'POST',headers:{Authorization:`Token ${speechApiKey}`},signal:AbortSignal.timeout(10000)});
-        if(!provider.ok) return json({error:'SPEECH_PROVIDER_UNAVAILABLE'},502);
+        if(!provider.ok) {console.warn('[TriFlow] Deepgram grant rejected',provider.status);return json({error:[401,403].includes(provider.status)?'SPEECH_CREDENTIAL_REJECTED':'SPEECH_PROVIDER_UNAVAILABLE'},502);}
         const data=await provider.json();
         if(typeof data?.access_token!=='string'||data.access_token.length<8)return json({error:'SPEECH_PROVIDER_INVALID_RESPONSE'},502);
         return json({access_token:data.access_token,expires_in:data.expires_in||30});
+      }
+      if(path==='/api/transcribe') {
+        // Batched multilingual microphone fallback when the Deepgram grant is not available.
+        // Files stay server-side; the browser never receives the OpenAI credential.
+        if(!canOpenAI) return json({error:'TRANSCRIPTION_NOT_CONFIGURED'},503);
+        if(!limit(`transcribe:${ip}`,90,3600000))return json({error:'HOURLY_LIMIT_REACHED'},429);
+        const declaredSize=Number(req.headers.get('content-length')||'0');
+        if(declaredSize>4_000_000)return json({error:'AUDIO_TOO_LARGE'},413);
+        const rawType=String(req.headers.get('content-type')||'').split(';')[0].toLowerCase().trim();
+        const mimeExt={'audio/webm':'webm','audio/mp4':'mp4','audio/ogg':'ogg','audio/wav':'wav','audio/mpeg':'mp3'};
+        if(!mimeExt[rawType])return json({error:'AUDIO_TYPE_UNSUPPORTED'},415);
+        const audio=await req.arrayBuffer();
+        if(audio.byteLength<1000||audio.byteLength>4_000_000)return json({error:'INVALID_AUDIO_SIZE'},413);
+        const form=new FormData();
+        form.append('file',new Blob([audio],{type:rawType}),`triflow-audio.${mimeExt[rawType]}`);
+        form.append('model',env.OPENAI_TRANSCRIBE_MODEL||'gpt-transcribe');
+        form.append('response_format','json');
+        form.append('prompt','Transcribe the actual audio in its original spoken languages. Preserve natural code-switching within a sentence. Do not translate or invent speech.');
+        const provider=await fetchImpl('https://api.openai.com/v1/audio/transcriptions',{
+          method:'POST',
+          headers:{Authorization:`Bearer ${openAiApiKey}`},
+          body:form,
+          signal:AbortSignal.timeout(27000)
+        });
+        if(!provider.ok){console.warn('[TriFlow] OpenAI transcription status',provider.status);return json({error:provider.status===429?'TRANSCRIPTION_RATE_LIMIT':'TRANSCRIPTION_PROVIDER_UNAVAILABLE'},provider.status===429?429:502);}
+        const result=await provider.json();
+        if(typeof result?.text!=='string')return json({error:'TRANSCRIPTION_INVALID_RESPONSE'},502);
+        return json({ok:true,text:result.text.trim().slice(0,2200),provider:'openai-batched-multilingual',wordLevelTags:false});
       }
       if(path==='/api/turn') {
         if(!canAI) return json({error:'AI_NOT_CONFIGURED'},503);

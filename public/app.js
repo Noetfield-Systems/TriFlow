@@ -18,7 +18,7 @@ const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fa
 const store=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));}catch{toast('Device storage is unavailable. Export your session to keep it.');}};
 const defaults={languages:['en','es','fr'],target:'en',replyPreference:'auto',mode:'conversation',speakReplies:true,livePreviews:true,voiceSpeed:0.96,speechEngine:'auto',freeLanguage:'en'};
 const parsed=load(CONFIG_KEY,{});
-const state={settings:{...defaults,...parsed},config:{speechReady:false,aiReady:false,accessCodeRequired:false},sessionReady:false,streaming:false,starting:false,speaking:false, socket:null,browserSpeech:null,activeSpeechProvider:null,stream:null,audioContext:null,sourceNode:null,processor:null,minuteTicker:null,keepAlive:null,startedAt:0,sessionId:crypto.randomUUID(),history:[],currentText:'',translatedText:'',lastSource:'',lastTranslation:'',partialTimer:null,previewSerial:0,turnQueue:Promise.resolve(),lastPreviewText:'',uncommitted:[],lastFinalAt:0,stopRequested:false,view:'live',wordLanguages:[],sampleActive:false};
+const state={settings:{...defaults,...parsed},config:{speechReady:false,aiReady:false,accessCodeRequired:false},sessionReady:false,streaming:false,starting:false,speaking:false, socket:null,browserSpeech:null,activeSpeechProvider:null,stream:null,audioContext:null,sourceNode:null,processor:null,minuteTicker:null,keepAlive:null,startedAt:0,sessionId:crypto.randomUUID(),history:[],currentText:'',translatedText:'',lastSource:'',lastTranslation:'',partialTimer:null,previewSerial:0,turnQueue:Promise.resolve(),lastPreviewText:'',uncommitted:[],lastFinalAt:0,stopRequested:false,openaiRecorder:null,openaiTimer:null,openaiQueue:Promise.resolve(),view:'live',wordLanguages:[],sampleActive:false};
 const trim=x=>String(x||'').trim();
 let toastTimer;
 function toast(message){const node=$('toast');node.textContent=message;node.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.classList.remove('show'),4200);}
@@ -32,17 +32,17 @@ function populateReply(){const select=$('replyPreference');select.replaceChildre
 function renderMode(){document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('selected',b.dataset.mode===state.settings.mode));const explanations={conversation:'Your AI companion replies naturally in your language.',interpreter:'Faithful translation without extra AI conversation.',coach:'Practice freely and get gentle, useful language tips.'};$('modeHint').textContent=explanations[state.settings.mode];}
 function showView(view){if(state.streaming&&view!=='live')stopAudio().catch(()=>{});state.view=view;['live','history','phrases'].forEach(name=>{$(name+'View').hidden=name!==view;});$('viewBreadcrumb').textContent=({live:'LIVE STUDIO',history:'SESSIONS',phrases:'SAVED PHRASES'})[view];document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===view));if(view==='history')renderSessions();if(view==='phrases')renderPhrases();window.scrollTo({top:0,behavior:'smooth'});}
 function browserMicAvailable(){return Boolean(window.SpeechRecognition||window.webkitSpeechRecognition);}
-function useBrowserSpeech(){return state.settings.speechEngine==='browser'||(state.settings.speechEngine==='auto'&&!state.config.speechReady);}
+function useBrowserSpeech(){return state.settings.speechEngine==='browser'||(state.settings.speechEngine==='auto'&&!state.config.speechReady&&!state.config.openAITranscribeReady);}
 function renderFreeLanguageControls(){const bar=$('freeLanguageControls');if(!bar)return;bar.replaceChildren();bar.hidden=!useBrowserSpeech();if(bar.hidden)return;
  const label=make('span','free-language-label','FREE MIC · SPEAKING LANGUAGE');bar.append(label);
  for(const code of state.settings.languages){const d=byCode[code],b=make('button','free-language-btn'+(state.settings.freeLanguage===code?' selected':''),`${d.flag} ${d.name}`);b.type='button';b.addEventListener('click',()=>{state.settings.freeLanguage=code;settingsChange();if(state.browserSpeech&&state.streaming)try{state.browserSpeech.stop();}catch{};toast(`Browser listening language: ${d.name}. To switch again, tap a language.`);});bar.append(b);}
 }
-function renderConfig(){const {speechReady,aiReady}=state.config;const browser=browserMicAvailable(),listeningAvailable=speechReady||browser;const ready=listeningAvailable;const advanced=speechReady&&!useBrowserSpeech();$('providerIndicator').classList.toggle('good',ready);
+function renderConfig(){const {speechReady,aiReady}=state.config;const browser=browserMicAvailable(),listeningAvailable=speechReady||state.config.openAITranscribeReady||browser;const ready=listeningAvailable;const advanced=(speechReady||state.config.openAITranscribeReady)&&!useBrowserSpeech();$('providerIndicator').classList.toggle('good',ready);
  $('providerLabel').textContent=advanced?(aiReady?'Multilingual engine + AI connected':'Multilingual speech · AI unavailable'):browser?(aiReady?'Free microphone + AI connected':'Free microphone · limited mode'):'Voice not supported on this browser';
  const claim=document.querySelector('.live-stats .stat-muted');if(claim)claim.textContent=advanced?'Automatic language switching':'Automatic with multilingual provider';
  $('setupNotice').hidden=advanced&&aiReady;
- const msg=!speechReady?browser?'Free browser microphone is available. Select each language when speaking; automatic mid-sentence language switching needs the multilingual provider. AI translation needs Cloudflare Workers AI, OpenAI or a compatible on-device Translator.':'This browser does not support speech recognition. You can type, or use a browser with Web Speech API support.':aiReady?'Automatic three-language speech is available. AI translation is ready.':'Automatic speech is configured, but AI translation needs Cloudflare Workers AI (SourceB pattern) or OpenAI.';
- $('setupNoticeText').textContent=msg;renderFreeLanguageControls();const line=$('voiceProviderDescription');if(line)line.textContent=useBrowserSpeech()?'Voice: browser speech recognition (free, one selected language at a time) · Playback: device voice':'Voice: automatic three-language recognition · Playback: device voice';
+ const msg=!speechReady&&!state.config.openAITranscribeReady?browser?'Free browser microphone is available. Select each language when speaking; automatic mid-sentence language switching needs the multilingual provider. AI translation needs Cloudflare Workers AI, OpenAI or a compatible on-device Translator.':'This browser does not support speech recognition. You can type, or use a browser with Web Speech API support.':aiReady?'Automatic three-language speech is available. AI translation is ready.':'Automatic speech is configured, but AI translation needs Cloudflare Workers AI (SourceB pattern) or OpenAI.';
+ $('setupNoticeText').textContent=msg;renderFreeLanguageControls();const line=$('voiceProviderDescription');if(line)line.textContent=useBrowserSpeech()?'Voice: browser speech recognition (free, one selected language at a time) · Playback: device voice':!speechReady&&state.config.openAITranscribeReady?'Voice: automatic multilingual transcription in short segments (OpenAI) · Playback: device voice':'Voice: automatic three-language recognition, OpenAI fallback available · Playback: device voice';
 }
 async function api(path,body){let r;try{r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(body??{})});}catch{throw Error('Network unavailable. Check your connection.');}let data;try{data=await r.json();}catch{throw Error('Invalid response from server.');}if(!r.ok){if(data.error==='SESSION_REQUIRED'){state.sessionReady=false;await initSession();throw Error('Your session expired. Please retry.');}const errMap={AI_NOT_CONFIGURED:'Connect Cloudflare Workers AI or OpenAI to translate and chat.',SPEECH_NOT_CONFIGURED:'Automatic code-switching needs a multilingual speech provider. Select Free microphone while it is being configured.',HOURLY_LIMIT_REACHED:'Usage limit reached. Come back later.',RATE_LIMITED:'Too many requests. Please try later.',UPSTREAM_TIMEOUT:'Language service timed out. Please retry.',AI_RATE_LIMIT:'AI service is busy. Try again shortly.',INVALID_TURN:'Invalid language settings or text.'};throw Error(errMap[data.error]||data.error||'Something went wrong.');}return data;}
 async function initSession(){try{await api('/api/session',{});state.sessionReady=true;return true;}catch(e){toast(e.message);return false;}}
@@ -88,7 +88,7 @@ async function startBrowserAudio(){if(!browserMicAvailable()){toast('This browse
  finally{state.starting=false;}
 }
 function getDeepgramUrl(){const q=new URLSearchParams({model:'nova-3',language:'multi',encoding:'linear16',sample_rate:'16000',channels:'1',interim_results:'true',punctuate:'true',smart_format:'true',endpointing:'450',utterance_end_ms:'1200'});for(const c of state.settings.languages)q.append('language_hint',c);return `wss://api.deepgram.com/v1/listen?${q}`;}
-async function startAudio(){if(state.starting||state.streaming)return;if(useBrowserSpeech())return startBrowserAudio();if(!state.config.speechReady){toast('Automatic three-language recognition is not configured. Choose Free browser mode.');return;}if(!state.sessionReady){if(!await initSession())return;}if(!navigator.mediaDevices?.getUserMedia||!window.AudioWorkletNode){toast('This browser does not support live microphone audio. Use Chrome or Safari over HTTPS.');return;}
+async function startAudio(){if(state.starting||state.streaming)return;if(useBrowserSpeech())return startBrowserAudio();if(!state.config.speechReady){if(state.config.openAITranscribeReady)return startOpenAIAudio();toast('Automatic three-language recognition is not configured. Choose Free browser mode.');return;}if(!state.sessionReady){if(!await initSession())return;}if(!navigator.mediaDevices?.getUserMedia||!window.AudioWorkletNode){toast('This browser does not support live microphone audio. Use Chrome or Safari over HTTPS.');return;}
  state.starting=true;state.stopRequested=false;setMicState('ready','Connecting securely…','Preparing your multilingual stream');$('micButton').disabled=true;
  try{
   const credentials=await api('/api/stt-token',{});
@@ -106,10 +106,52 @@ async function startAudio(){if(state.starting||state.streaming)return;if(useBrow
   state.minuteTicker=setInterval(()=>{const seconds=Math.floor((Date.now()-state.startedAt)/1000);$('sessionTimer').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;if(seconds>=15*60){toast('15-minute session limit reached. Start a new session to continue.');stopAudio().catch(()=>{});}},1000);
   state.keepAlive=setInterval(()=>{if(socket.readyState===WebSocket.OPEN&&state.speaking)socket.send(JSON.stringify({type:'KeepAlive'}));},4000);
   setMicState('active','We’re listening. Just speak.','Switch between your three languages naturally.');
- }catch(e){toast(e.message);await stopAudio();setMicState('error','Could not start microphone','Check permissions and provider configuration.');}
+ }catch(e){toast(e.message);await stopAudio();setMicState('error','Could not start microphone','Check permissions and provider configuration.');if(state.config.openAITranscribeReady&&state.settings.speechEngine==='auto')setTimeout(()=>startOpenAIAudio().catch(err=>toast(err.message)),100);}
  finally{state.starting=false;$('micButton').disabled=false;}
 }
-async function stopAudio(){if(state.stopRequested)return;state.stopRequested=true;if(state.activeSpeechProvider==='browser'){clearInterval(state.minuteTicker);clearTimeout(state.partialTimer);try{state.browserSpeech?.abort();}catch{}state.browserSpeech=null;state.streaming=false;state.activeSpeechProvider=null;setWave(0);setMicState('ready','Free microphone stopped','Start again whenever you like.');persistSession();return;}clearInterval(state.minuteTicker);clearInterval(state.keepAlive);clearTimeout(state.partialTimer);state.previewSerial++;
+
+async function startOpenAIAudio(){
+ if(state.starting||state.streaming)return;
+ if(!state.config.openAITranscribeReady){toast('Multilingual fallback is not configured.');return;}
+ if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toast('Audio recording is unsupported in this browser. Try Chrome or Safari.');return;}
+ if(!state.sessionReady&&!await initSession())return;
+ state.starting=true;state.stopRequested=false;state.sampleActive=false;
+ setMicState('ready','Starting automatic multilingual microphone…','Using short speech segments via OpenAI');
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+  state.stream=stream;state.streaming=true;state.activeSpeechProvider='openai-file';state.startedAt=Date.now();
+  const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg'].find(x=>MediaRecorder.isTypeSupported(x));
+  function nextChunk(){
+   if(!state.streaming||state.stopRequested||state.activeSpeechProvider!=='openai-file')return;
+   const rec=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+   state.openaiRecorder=rec;
+   rec.ondataavailable=event=>{
+    const chunk=event.data;
+    if(!chunk||chunk.size<1000||state.stopRequested)return;
+    state.openaiQueue=state.openaiQueue.then(async()=>{
+     const response=await fetch('/api/transcribe',{method:'POST',headers:{'Content-Type':chunk.type||'audio/webm'},credentials:'same-origin',body:chunk});
+     const body=await response.json().catch(()=>({}));
+     if(!response.ok)throw Error(body.error||'Transcription unavailable');
+     const utterance=trim(body.text);
+     if(utterance){showTranscript(utterance);$('detectedPill').textContent='AUTO · OPENAI';queueTurn(utterance,false);}
+    }).catch(error=>toast('Voice transcription: '+error.message));
+   };
+   rec.onstop=()=>{clearTimeout(state.openaiTimer);if(state.streaming&&!state.stopRequested&&state.activeSpeechProvider==='openai-file')setTimeout(nextChunk,20);};
+   rec.start();
+   state.openaiTimer=setTimeout(()=>{if(rec.state==='recording')rec.stop();},6500);
+  }
+  nextChunk();
+  state.minuteTicker=setInterval(()=>{
+   const seconds=Math.floor((Date.now()-state.startedAt)/1000);
+   $('sessionTimer').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
+   if(seconds>=15*60)stopAudio().catch(()=>{});
+  },1000);
+  setMicState('active','Listening across your three languages','Automatic switching • translations update every few seconds.');
+  $('translationMeta').textContent='OpenAI microphone mode · segmented transcription, not word-by-word streaming';
+ }catch(error){toast('Microphone unavailable: '+error.message);await stopAudio();}
+ finally{state.starting=false;}
+}
+async function stopAudio(){if(state.stopRequested)return;state.stopRequested=true;if(state.activeSpeechProvider==='openai-file'){clearInterval(state.minuteTicker);clearTimeout(state.openaiTimer);state.streaming=false;try{if(state.openaiRecorder?.state==='recording')state.openaiRecorder.stop();}catch{}try{state.stream?.getTracks().forEach(t=>t.stop());}catch{}state.openaiRecorder=null;state.stream=null;state.activeSpeechProvider=null;setMicState('ready','Session complete','Ready for another conversation.');persistSession();return;}if(state.activeSpeechProvider==='browser'){clearInterval(state.minuteTicker);clearTimeout(state.partialTimer);try{state.browserSpeech?.abort();}catch{}state.browserSpeech=null;state.streaming=false;state.activeSpeechProvider=null;setWave(0);setMicState('ready','Free microphone stopped','Start again whenever you like.');persistSession();return;}clearInterval(state.minuteTicker);clearInterval(state.keepAlive);clearTimeout(state.partialTimer);state.previewSerial++;
  const socket=state.socket;state.socket=null;if(socket&&socket.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify({type:'Finalize'}));}catch{}};
  try{state.stream?.getTracks().forEach(t=>t.stop());}catch{}try{state.sourceNode?.disconnect();state.processor?.disconnect();await state.audioContext?.close();}catch{};
  state.stream=null;state.audioContext=null;state.sourceNode=null;state.processor=null;

@@ -61,3 +61,26 @@ test('Railway screenshot variable names activate both real providers without exp
  assert.equal(seen[0].authorization,'Token fake-dg-secret');
  assert.equal(seen[1].authorization,'Bearer fake-openai-secret');
 });
+
+test('OpenAI transcription fallback verifies actual uploaded audio body and returns spoken words', async()=>{
+ let checked=false;
+ const mock=async(url,init)=>{
+  assert.match(url,/\/v1\/audio\/transcriptions$/);
+  assert.equal(init.headers.Authorization,'Bearer staging-test-value');
+  assert.equal(init.body.get('model'),'gpt-transcribe');
+  assert.equal(init.body.get('file').name,'triflow-audio.webm');
+  checked=true;return Response.json({text:'I think que podemos parler demain'});
+ };
+ const h=app({'OpenAI-API':'staging-test-value'},mock);
+ const config=await (await request(h,'/api/config')).json();assert.equal(config.openAITranscribeReady,true);
+ const cookie=await signedCookie(h);
+ const r=await h(new Request(origin+'/api/transcribe',{method:'POST',headers:{origin,cookie,'content-type':'audio/webm'},body:new Uint8Array(2000)}));
+ assert.equal(r.status,200);assert.equal((await r.json()).text,'I think que podemos parler demain');assert.equal(checked,true);
+ const bad=await h(new Request(origin+'/api/transcribe',{method:'POST',headers:{origin,cookie,'content-type':'text/plain'},body:new Uint8Array(2000)}));assert.equal(bad.status,415);
+});
+test('Deepgram credential rejection gives a clear diagnostic and never returns secret',async()=>{
+ const h=app({'Deepgram-api':'test-secret'},async()=>new Response('unauthorized',{status:401}));
+ const ck=await signedCookie(h);
+ const r=await request(h,'/api/stt-token','POST',{}, {cookie:ck});
+ assert.equal(r.status,502);const body=await r.text();assert.match(body,/SPEECH_CREDENTIAL_REJECTED/);assert.doesNotMatch(body,/test-secret/);
+});
