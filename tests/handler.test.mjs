@@ -33,3 +33,31 @@ test('CSP protects served client assets',async()=>{
  const h=createHandler({env:{},assets:{'/index.html':'<main>TriFlow</main>'}});
  const r=await request(h,'/');assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/object-src 'none'/);
 });
+
+test('Railway screenshot variable names activate both real providers without exposing credentials', async()=>{
+ const seen=[];
+ const fetchImpl=async(url,init)=>{
+   seen.push({url,authorization:init.headers.Authorization});
+   if(url.includes('deepgram.com'))return Response.json({access_token:'eyFakeDeepgramEphemeralToken',expires_in:30});
+   if(url.includes('openai.com'))return Response.json({choices:[{message:{content:JSON.stringify({
+     translation:'I think we can talk tomorrow.',reply:'Oui, demain !',
+     replyLanguage:'fr',detectedLanguages:['en','es','fr'],note:'',suggestedPhrase:''
+   })}}]});
+   throw Error('Unexpected provider');
+ };
+ const h=app({'Deepgram-api':'fake-dg-secret','OpenAI-API':'fake-openai-secret'},fetchImpl);
+ const publicConfig=await (await request(h,'/api/config')).text();
+ assert.equal(JSON.parse(publicConfig).speechReady,true);
+ assert.equal(JSON.parse(publicConfig).aiReady,true);
+ assert.doesNotMatch(publicConfig,/fake-dg-secret|fake-openai-secret/);
+ const cookie=await signedCookie(h);
+ const t=await request(h,'/api/stt-token','POST',{}, {cookie});
+ assert.equal(t.status,200);assert.equal((await t.json()).access_token,'eyFakeDeepgramEphemeralToken');
+ const input={languages:['en','es','fr'],target:'en',text:'I think que podemos parler demain',mode:'conversation'};
+ const r=await request(h,'/api/turn','POST',input,{cookie});
+ assert.equal(r.status,200);const output=await r.json();
+ assert.deepEqual(output.detectedLanguages,['en','es','fr']);
+ assert.equal(output.translation,'I think we can talk tomorrow.');
+ assert.equal(seen[0].authorization,'Token fake-dg-secret');
+ assert.equal(seen[1].authorization,'Bearer fake-openai-secret');
+});

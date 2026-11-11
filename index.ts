@@ -35,9 +35,13 @@ function cleanModelOutput(obj, langs, target, mode, preview) {if(!obj || typeof 
 function createHandler({env=process.env,assets={},fetchImpl=fetch,nowFn=Date.now}={}) {
   const secret = env.SESSION_SECRET || crypto.randomUUID();
   const limit = createLimiter(nowFn);
-  const canSpeech=Boolean(env.DEEPGRAM_API_KEY);
+  // Accept the two names entered in Railway before the canonical variables were documented.
+  // Values are server-side only; /api/config never returns credentials.
+  const speechApiKey = (env.DEEPGRAM_API_KEY || env['Deepgram-api'] || '').trim();
+  const openAiApiKey = (env.OPENAI_API_KEY || env['OpenAI-API'] || '').trim();
+  const canSpeech=Boolean(speechApiKey);
   const canSourceBAI=Boolean(env.CF_ACCOUNT_ID && env.CF_AI_API_TOKEN);
-  const canOpenAI=Boolean(env.OPENAI_API_KEY);
+  const canOpenAI=Boolean(openAiApiKey);
   const canAI=canSourceBAI || canOpenAI;
   return async function handler(req) {
     const url=new URL(req.url), path=url.pathname;
@@ -64,7 +68,7 @@ function createHandler({env=process.env,assets={},fetchImpl=fetch,nowFn=Date.now
       if(path==='/api/stt-token') {
         if(!canSpeech) return json({error:'SPEECH_NOT_CONFIGURED'},503);
         if(!limit(`stt:${ip}`,8,3600000)) return json({error:'HOURLY_LIMIT_REACHED'},429);
-        const provider=await fetchImpl('https://api.deepgram.com/v1/auth/grant',{method:'POST',headers:{Authorization:`Token ${env.DEEPGRAM_API_KEY}`},signal:AbortSignal.timeout(10000)});
+        const provider=await fetchImpl('https://api.deepgram.com/v1/auth/grant',{method:'POST',headers:{Authorization:`Token ${speechApiKey}`},signal:AbortSignal.timeout(10000)});
         if(!provider.ok) return json({error:'SPEECH_PROVIDER_UNAVAILABLE'},502);
         const data=await provider.json();
         if(typeof data?.access_token!=='string'||data.access_token.length<8)return json({error:'SPEECH_PROVIDER_INVALID_RESPONSE'},502);
@@ -96,7 +100,7 @@ function createHandler({env=process.env,assets={},fetchImpl=fetch,nowFn=Date.now
           if(modelResponse.ok){const result=await modelResponse.json();content=String(result?.result?.response || result?.response || '');provider='cloudflare-workers-ai';}
         }
         if(!content && canOpenAI){
-          const modelResponse=await fetchImpl('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:env.OPENAI_MODEL||'gpt-4.1-mini',temperature:0.3,response_format:{type:'json_object'},messages,max_completion_tokens:preview?180:400}),signal:AbortSignal.timeout(22000)});
+          const modelResponse=await fetchImpl('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${openAiApiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:env.OPENAI_MODEL||'gpt-4.1-mini',temperature:0.3,response_format:{type:'json_object'},messages,max_completion_tokens:preview?180:400}),signal:AbortSignal.timeout(22000)});
           lastStatus=modelResponse.status;
           if(modelResponse.ok){const result=await modelResponse.json();content=String(result?.choices?.[0]?.message?.content || '');provider='openai';}
         }
