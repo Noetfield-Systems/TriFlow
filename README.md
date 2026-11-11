@@ -14,19 +14,20 @@ TriFlow lets a user select three languages, practice spoken conversations, view 
 ## What requires credentials
 - `DEEPGRAM_API_KEY`: automatic 3-language speech recognition using Nova-3 `language=multi`, language hints, interim captions and word-level language tags.
 - `CF_ACCOUNT_ID` and `CF_AI_API_TOKEN`: Cloudflare Workers AI similar to the LLM provider pattern used by SourceB (free tier is limited, not unlimited).
-- `OPENAI_API_KEY`: optional LLM fallback.
+- `OPENAI_API_KEY`: real AI translation and batched automatic multilingual microphone fallback when Deepgram is unavailable. OpenAI file transcription requires quota and introduces short-caption delays.
+- Railway legacy names `OpenAI-API` and `Deepgram-api` are also recognized by the server; canonical names remain recommended.
 - `SESSION_SECRET`: required for durable signed sessions between deploys. Set a random value at least 32 bytes.
 All keys are supplied only via Railway environment variables. Never commit keys.
 
 **SourceB's Retell receptionist is not a free multilingual streaming provider.** We do not proxy its customer conversations or business credentials.
 
 ## Deploy
-The runnable source is the single self-contained `index.ts` Bun distribution, embedding the frontend; no external packages or build steps. Deploy with Railway as a repo-backed service, start command `bun index.ts`, healthcheck `/api/health`. `PORT` is read from Railway.
+The runnable source is the single self-contained `index.ts` Bun distribution, embedding the frontend; no external runtime packages. On every deploy, Railway regenerates it from `src/handler.mjs` and the frontend with `node scripts/bundle.mjs`; deploy with Railway as a repo-backed service, start command `bun index.ts`, healthcheck `/api/health`. `PORT` is read from Railway.
 
-Local: install [Bun](https://bun.sh), run `bun index.ts`, visit `http://localhost:3000`. Run `node --test tests/*.test.mjs` for HTTP smoke tests (starts the Bun app itself).
+Local: install [Bun](https://bun.sh), run `node scripts/bundle.mjs && bun index.ts`, visit `http://localhost:3000`. Run `node --test tests/*.test.mjs` for HTTP smoke tests (starts the Bun app itself).
 
 ## Important acceptance boundary
-An Online deployment is not proof of three-language speech recognition. Complete provider E2E requires real keys and a real mixed-language microphone recording. Test the sample **“I think que podemos parler demain”** as natural speech on a real device. Confirm the whole utterance is detected in one open WebSocket, word language tags where available, timely translation and audible response.
+An Online deployment is not proof of three-language speech recognition. When the Deepgram grant fails, the automatic OpenAI fallback retains one microphone session and processes short 6.5-second recorded chunks. It does not provide low-latency per-word language labels. Complete provider E2E requires real keys and a real mixed-language microphone recording. Test the sample **“I think que podemos parler demain”** as natural speech on a real device. Confirm the whole utterance is detected in one open WebSocket, word language tags where available, timely translation and audible response.
 
 The free Web Speech API mode requires manual language selection and must not be represented as full automatic code switching. Transcript processing depends on third-party service availability and privacy terms. See /privacy and /terms.
 
