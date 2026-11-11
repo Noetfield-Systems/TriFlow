@@ -18,6 +18,9 @@ test('Public app and keyless operation',async()=>{
  const illegal=await fetch(origin+'/api/session',{method:'POST',headers:{origin:'https://evil.example','content-type':'application/json'},body:'{}'});
  assert.equal(illegal.status,403);
  for(const path of ['/privacy','/terms']){const r=await fetch(origin+path);assert.equal(r.status,200);assert.match(await r.text(),/TriFlow/);}
+ const founder=await fetch(origin+'/admin');assert.equal(founder.status,200);assert.match(await founder.text(),/Founder insights/);
+ const founderJs=await fetch(origin+'/admin.js');assert.equal(founderJs.status,200);assert.match(await founderJs.text(),/admin\/insights/);
+ const locked=await fetch(origin+'/api/admin/insights');assert.equal(locked.status,401);
  const source=await fetch(origin+'/app.js');assert.equal(source.status,200);assert.match(source.headers.get('content-security-policy'),/object-src 'none'/);
 });
 test.after(()=>{if(server.exitCode===null)server.kill('SIGTERM');});
