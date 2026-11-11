@@ -58,7 +58,7 @@ async function run(name,viewport){
  await page.locator('#chooseAccurateMode').click();
  await page.locator('#settingsButton').click();
  assert.equal(await page.locator('#speechEngine').inputValue(),'accurate');
- await page.locator('#settingsDialog button[value="cancel"]').click();
+ await page.locator('#settingsDialog .cancel-btn').click();
 
  await page.waitForTimeout(4400); // Capture the stable premium UI rather than a transient toast.
  await page.screenshot({path:'qa-screenshots/'+name+'.png',fullPage:true,animations:'disabled'});
