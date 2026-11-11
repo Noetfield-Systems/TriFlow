@@ -34,6 +34,32 @@ async function run(name,viewport){
  await page.locator('#typedInput').fill('I think que podemos parler demain');
  await page.locator('#sendTyped').click();
  await page.waitForFunction(()=>document.querySelector('#conversationFeed')?.textContent.includes('Podemos hablar mañana'),null,{timeout:12000});
+ // Premium voice picker and in-app Flow feedback + help work on both form factors.
+ await page.locator('#flowHelpTop').click();
+ await page.locator('#flowDrawer').waitFor({state:'visible'});
+ await page.locator('#flowInput').fill('How can I switch between English, Spanish and French?');
+ await page.locator('#flowForm button[type="submit"]').click();
+ await page.waitForFunction(()=>document.querySelectorAll('.flow-msg.ai').length>=2,null,{timeout:12000});
+ await page.screenshot({path:'qa-screenshots/'+name+'-flow-assistant.png',fullPage:true,animations:'disabled'});
+ await page.locator('[data-flow-tab="feedback"]').click();
+ await page.locator('[data-score="5"]').click();
+ await page.locator('#flowFeedbackCategory').selectOption('idea');
+ await page.locator('#flowFeedbackMessage').fill('QA BROWSER TEST: Check the persistence of feedback without sharing audio or conversation text.');
+ await page.locator('#flowFeedbackAlias').fill('TriFlow QA');
+ await page.locator('#flowFeedbackSubmit').click();
+ await page.waitForFunction(()=>document.querySelector('#flowFeedbackStatus')?.textContent.includes('TF-FB-'),null,{timeout:12000});
+ await page.screenshot({path:'qa-screenshots/'+name+'-feedback.png',fullPage:true,animations:'disabled'});
+ await page.locator('#flowUsageConsent').check();
+ await page.locator('#flowClose').click();
+ await page.locator('#flowDrawer').waitFor({state:'hidden'});
+ await page.locator('#voiceEngine').selectOption('studio');
+ assert.ok((await page.locator('#voicePersona option').count())>=2,'Curated neural voice choices');
+ await page.locator('#voiceEngine').selectOption('device');
+ await page.locator('#chooseAccurateMode').click();
+ await page.locator('#settingsButton').click();
+ assert.equal(await page.locator('#speechEngine').inputValue(),'accurate');
+ await page.locator('#settingsDialog button[value="cancel"]').click();
+
  await page.waitForTimeout(4400); // Capture the stable premium UI rather than a transient toast.
  await page.screenshot({path:'qa-screenshots/'+name+'.png',fullPage:true,animations:'disabled'});
  const width=await page.evaluate(()=>({document:document.documentElement.scrollWidth,screen:window.innerWidth}));
