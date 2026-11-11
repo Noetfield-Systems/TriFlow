@@ -26,7 +26,7 @@ test('speech is streamed with server-side API key; browser gets only provider st
  proxy.websocket.message(client,sound);
  assert.equal(upstream.sent.length,1);
  events.message({data:JSON.stringify({type:'Results',channel:{alternatives:[]}})});
- assert.doesNotMatch(messages.join(''),'private-provider-key');
+ assert.doesNotMatch(messages.join(''),/private-provider-key/);
  assert.equal(messages.length,2);
  proxy.websocket.close(client);
 });
