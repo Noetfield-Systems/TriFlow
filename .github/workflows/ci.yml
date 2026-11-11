@@ -28,7 +28,7 @@ jobs:
           diff -u /tmp/triflow-build.sha /tmp/triflow-rebuild.sha
       - name: Test provider contracts and HTTP endpoints
         timeout-minutes: 2
-        run: node --test --test-reporter=spec tests/*.test.mjs
+        run: node --test --test-force-exit --test-reporter=spec tests/*.test.mjs
       - name: Install headless browser for UI E2E
         run: |
           npm install --no-save playwright
