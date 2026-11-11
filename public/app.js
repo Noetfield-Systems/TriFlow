@@ -16,16 +16,16 @@ const $=id=>document.getElementById(id);
 const byCode=Object.fromEntries(LANGUAGES.map(([code,name,flag,locale])=>[code,{name,flag,locale}]));
 const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}};
 const store=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));}catch{toast('Device storage is unavailable. Export your session to keep it.');}};
-const defaults={languages:['en','es','fr'],target:'en',replyPreference:'auto',mode:'conversation',speakReplies:true,livePreviews:true,voiceSpeed:0.96,speechEngine:'auto',freeLanguage:'en'};
+const defaults={languages:['en','es','fr'],target:'en',replyPreference:'auto',mode:'conversation',speakReplies:true,livePreviews:true,voiceSpeed:0.96,speechEngine:'auto',freeLanguage:'en',voiceEngine:'device',voiceProfiles:{en:'hannah',es:'valentina',fr:'camille'},deviceVoices:{},telemetryConsent:false};
 const parsed=load(CONFIG_KEY,{});
-const state={settings:{...defaults,...parsed},config:{speechReady:false,aiReady:false,accessCodeRequired:false},sessionReady:false,streaming:false,starting:false,speaking:false, socket:null,browserSpeech:null,activeSpeechProvider:null,stream:null,audioContext:null,sourceNode:null,processor:null,minuteTicker:null,keepAlive:null,startedAt:0,sessionId:crypto.randomUUID(),history:[],currentText:'',translatedText:'',lastSource:'',lastTranslation:'',partialTimer:null,previewSerial:0,turnQueue:Promise.resolve(),lastPreviewText:'',uncommitted:[],lastFinalAt:0,stopRequested:false,fallingBack:false,openaiRecorder:null,openaiTimer:null,openaiQueue:Promise.resolve(),view:'live',wordLanguages:[],sampleActive:false};
+const state={settings:{...defaults,...parsed},config:{speechReady:false,aiReady:false,accessCodeRequired:false},experience:{neuralVoicesReady:false,voiceCatalog:{},helpReady:false,feedbackReady:false},sessionReady:false,streaming:false,starting:false,speaking:false, socket:null,browserSpeech:null,activeSpeechProvider:null,stream:null,audioContext:null,sourceNode:null,processor:null,minuteTicker:null,keepAlive:null,startedAt:0,sessionId:crypto.randomUUID(),history:[],currentText:'',translatedText:'',lastSource:'',lastTranslation:'',partialTimer:null,previewSerial:0,turnQueue:Promise.resolve(),lastPreviewText:'',uncommitted:[],lastFinalAt:0,stopRequested:false,fallingBack:false,openaiRecorder:null,openaiTimer:null,openaiQueue:Promise.resolve(),view:'live',wordLanguages:[],sampleActive:false};
 const trim=x=>String(x||'').trim();
 let toastTimer;
 function toast(message){const node=$('toast');node.textContent=message;node.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.classList.remove('show'),4200);}
 function make(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function languageName(code){return byCode[code]?.name||code;}
-function assertSettings(){const l=state.settings.languages;if(!Array.isArray(l)||l.length!==3||new Set(l).size!==3||l.some(c=>!byCode[c]))state.settings.languages=defaults.languages.slice();if(!state.settings.languages.includes(state.settings.target))state.settings.target=state.settings.languages[0];if(!['auto',...state.settings.languages].includes(state.settings.replyPreference))state.settings.replyPreference='auto';if(!['conversation','interpreter','coach'].includes(state.settings.mode))state.settings.mode='conversation';if(![0.82,0.96,1.1].includes(Number(state.settings.voiceSpeed)))state.settings.voiceSpeed=0.96;if(!['auto','browser','deepgram'].includes(state.settings.speechEngine))state.settings.speechEngine='auto';if(!state.settings.languages.includes(state.settings.freeLanguage))state.settings.freeLanguage=state.settings.languages[0];}
-function settingsChange(){assertSettings();store(CONFIG_KEY,state.settings);renderLanguages();renderMode();}
+function assertSettings(){const l=state.settings.languages;if(!Array.isArray(l)||l.length!==3||new Set(l).size!==3||l.some(c=>!byCode[c]))state.settings.languages=defaults.languages.slice();if(!state.settings.languages.includes(state.settings.target))state.settings.target=state.settings.languages[0];if(!['auto',...state.settings.languages].includes(state.settings.replyPreference))state.settings.replyPreference='auto';if(!['conversation','interpreter','coach'].includes(state.settings.mode))state.settings.mode='conversation';if(![0.82,0.96,1.1].includes(Number(state.settings.voiceSpeed)))state.settings.voiceSpeed=0.96;if(!['auto','browser','deepgram'].includes(state.settings.speechEngine))state.settings.speechEngine='auto';if(!['device','studio'].includes(state.settings.voiceEngine))state.settings.voiceEngine='device';if(!state.settings.voiceProfiles||typeof state.settings.voiceProfiles!=='object')state.settings.voiceProfiles={};if(!state.settings.deviceVoices||typeof state.settings.deviceVoices!=='object')state.settings.deviceVoices={};if(typeof state.settings.telemetryConsent!=='boolean')state.settings.telemetryConsent=false;if(!state.settings.languages.includes(state.settings.freeLanguage))state.settings.freeLanguage=state.settings.languages[0];}
+function settingsChange(){assertSettings();store(CONFIG_KEY,state.settings);renderLanguages();renderMode();renderVoicePicker();trackTelemetry('setting_changed');}
 function populateSelect(select,codes,selected){select.replaceChildren();for(const code of codes){const data=byCode[code];if(!data)continue;const opt=new Option(`${data.flag}  ${data.name}`,code);select.add(opt);}select.value=selected;}
 function renderLanguages(){const {languages,target}=state.settings;const rail=$('languageRail'),side=$('sidebarLanguages');rail.replaceChildren();side.replaceChildren();languages.forEach((code,i)=>{const d=byCode[code];const chip=make('span','lang-chip');chip.append(make('span','chip-flag',d.flag),document.createTextNode(d.name));rail.append(chip);if(i<2)rail.append(make('span','lang-join','↔'));const row=make('div','sidebar-lang');row.append(make('span','language-dot'),document.createTextNode(d.name));side.append(row);});populateSelect($('targetLanguage'),languages,target);$('lang1').value=languages[0];$('lang2').value=languages[1];$('lang3').value=languages[2];populateReply();renderFreeLanguageControls();}
 function populateReply(){const select=$('replyPreference');select.replaceChildren(new Option('Follow my language automatically','auto'));for(const code of state.settings.languages)select.add(new Option(`${byCode[code].flag} Speak ${byCode[code].name}`,code));select.value=state.settings.replyPreference;}
@@ -46,7 +46,7 @@ function renderConfig(){const {speechReady,aiReady}=state.config;const browser=b
 }
 async function api(path,body){let r;try{r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(body??{})});}catch{throw Error('Network unavailable. Check your connection.');}let data;try{data=await r.json();}catch{throw Error('Invalid response from server.');}if(!r.ok){if(data.error==='SESSION_REQUIRED'){state.sessionReady=false;await initSession();throw Error('Your session expired. Please retry.');}const errMap={AI_NOT_CONFIGURED:'Connect Cloudflare Workers AI or OpenAI to translate and chat.',SPEECH_NOT_CONFIGURED:'Automatic code-switching needs a multilingual speech provider. Select Free microphone while it is being configured.',HOURLY_LIMIT_REACHED:'Usage limit reached. Come back later.',RATE_LIMITED:'Too many requests. Please try later.',UPSTREAM_TIMEOUT:'Language service timed out. Please retry.',AI_RATE_LIMIT:'AI service is busy. Try again shortly.',INVALID_TURN:'Invalid language settings or text.'};throw Error(errMap[data.error]||data.error||'Something went wrong.');}return data;}
 async function initSession(){try{await api('/api/session',{});state.sessionReady=true;return true;}catch(e){toast(e.message);return false;}}
-async function initialize(){assertSettings();for(const id of ['lang1','lang2','lang3'])populateSelect($(id),LANGUAGES.map(x=>x[0]),state.settings.languages[Number(id.at(-1))-1]);renderLanguages();renderMode();$('speakReplies').checked=state.settings.speakReplies;$('livePreviews').checked=state.settings.livePreviews;buildWaveform();try{const r=await fetch('/api/config');if(!r.ok)throw Error('Configuration unavailable');state.config=await r.json();renderConfig();await initSession();}catch(e){toast(e.message);$('setupNotice').hidden=false;$('setupNoticeText').textContent='Unable to reach the application API.';}registerEvents();if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+async function initialize(){assertSettings();for(const id of ['lang1','lang2','lang3'])populateSelect($(id),LANGUAGES.map(x=>x[0]),state.settings.languages[Number(id.at(-1))-1]);renderLanguages();renderMode();$('speakReplies').checked=state.settings.speakReplies;$('livePreviews').checked=state.settings.livePreviews;buildWaveform();try{const r=await fetch('/api/config');if(!r.ok)throw Error('Configuration unavailable');state.config=await r.json();renderConfig();await initSession();}catch(e){toast(e.message);$('setupNotice').hidden=false;$('setupNoticeText').textContent='Unable to reach the application API.';}registerEvents();initializeExperience().catch(err=>console.warn('Experience features unavailable:',err.message));if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});}
 function buildWaveform(){const wave=$('waveform');for(let i=0;i<32;i++){const bar=make('i');bar.style.height= `${7+(i%7)*3}px`;wave.append(bar);}}
 function setWave(level){const amount=Math.min(1,Math.max(0,level*9));[...$('waveform').children].forEach((bar,i)=>{const v=Math.abs(Math.sin(i*.54+performance.now()*.002));bar.style.height=`${7+Math.round(v*amount*39)}px`;bar.style.opacity=String(.45+amount*.55);});}
 function setMicState(kind,label,sub){$('sessionState').className='session-state'+(kind==='active'?' active':kind==='error'?' error':'');$('sessionState').lastChild.textContent=' '+(kind==='active'?'Listening':kind==='error'?'Needs attention':'Ready to begin');$('voiceStatus').textContent=label;$('voiceHint').textContent=sub;$('micButton').classList.toggle('live',kind==='active');$('micIcon').textContent=kind==='active'?'■':'♬';$('micButton').setAttribute('aria-label',kind==='active'?'Stop microphone session':'Start microphone session');}
@@ -202,12 +202,53 @@ async function processTurn(text,isTyped){if(!state.sessionReady){if(!await initS
  const settings={...state.settings};state.sampleActive=false;showTranscript(text);showTranslation('Translating…','Preserving meaning across your three languages');
  try{const out=await api('/api/turn',{text,languages:settings.languages,target:settings.target,mode:settings.mode,replyPreference:settings.replyPreference,history:state.history.slice(-8).map(({source,reply})=>({text:source,reply})),preview:false});
   showTranslation(out.translation,`Translated into ${languageName(settings.target)} · ${out.detectedLanguages.map(languageName).join(' + ')||'Auto-detected'}`);
-  const turn={id:crypto.randomUUID(),time:Date.now(),source:text,translation:out.translation,reply:out.reply,replyLanguage:out.replyLanguage,note:out.note,suggestedPhrase:out.suggestedPhrase,target:settings.target};state.history.push(turn);state.lastSource=text;state.lastTranslation=out.translation;renderFeed();persistSession();
+  const turn={id:crypto.randomUUID(),time:Date.now(),source:text,translation:out.translation,reply:out.reply,replyLanguage:out.replyLanguage,note:out.note,suggestedPhrase:out.suggestedPhrase,target:settings.target};state.history.push(turn);state.lastSource=text;state.lastTranslation=out.translation;renderFeed();persistSession();trackTelemetry('turn_completed',out.provider||'ai');
   if(out.reply&&settings.speakReplies) speak(out.reply,out.replyLanguage);
  }catch(e){showTranslation('Translation failed.','You can retry by sending the sentence below.');if(isTyped)$('typedInput').value=text;throw e;}
 }
-function speak(text,code){if(!trim(text)){toast('No translation to play yet.');return;}if(!('speechSynthesis' in window)){toast('This device does not offer a speech voice.');return;}window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=byCode[code]?.locale||'en-US';u.rate=Number(state.settings.voiceSpeed)||0.96;u.pitch=1.02;const voices=window.speechSynthesis.getVoices();const exact=voices.find(v=>v.lang?.toLowerCase()===u.lang.toLowerCase());const similar=voices.find(v=>v.lang?.toLowerCase().startsWith(code.toLowerCase()+'-'));if(exact||similar)u.voice=exact||similar;
- u.onstart=()=>{state.speaking=true;$('voiceHint').textContent='TriFlow is speaking · AI-generated voice';};u.onend=u.onerror=()=>{state.speaking=false;if(state.streaming)$('voiceHint').textContent='Switch between your three languages naturally.';};window.speechSynthesis.speak(u);}
+let activeVoiceAudio=null,activeVoiceUrl=null;
+function stopVoicePlayback(){
+ try{activeVoiceAudio?.pause();}catch{}
+ if(activeVoiceUrl)URL.revokeObjectURL(activeVoiceUrl);
+ activeVoiceAudio=null;activeVoiceUrl=null;
+ if('speechSynthesis' in window)window.speechSynthesis.cancel();
+ state.speaking=false;
+}
+async function speak(text,code){
+ if(!trim(text)){toast('Nothing to play yet.');return;}
+ stopVoicePlayback();
+ const voiceMode=state.settings.voiceEngine;
+ const catalogue=state.experience.voiceCatalog?.[code]||[];
+ if(voiceMode==='studio' && state.experience.neuralVoicesReady && catalogue.length){
+  try{
+   if(!state.sessionReady && !await initSession())throw Error('Session unavailable');
+   const voice=state.settings.voiceProfiles?.[code]||catalogue[0][0];
+   const response=await fetch('/api/voice',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({text:text.slice(0,650),language:code,voice,speed:1})});
+   if(!response.ok)throw Error('Neural voice unavailable');
+   const blob=await response.blob();
+   if(blob.size<300||!blob.type.startsWith('audio/'))throw Error('Unexpected audio output');
+   const player=new Audio();activeVoiceUrl=URL.createObjectURL(blob);player.src=activeVoiceUrl;activeVoiceAudio=player;
+   player.playbackRate=Number(state.settings.voiceSpeed)||0.96;
+   player.onplay=()=>{state.speaking=true;$('voiceHint').textContent='Studio voice is speaking · AI-generated audio';};
+   player.onended=player.onerror=()=>{state.speaking=false;if(state.streaming)$('voiceHint').textContent='Switch between your languages naturally.';};
+   await player.play();
+   trackTelemetry('voice_generated','deepgram-flux');
+   return;
+  }catch(error){stopVoicePlayback();toast('Studio voice unavailable. Switching to your device voice.');}
+ }
+ if(!('speechSynthesis' in window)){toast('This device cannot play synthetic speech.');return;}
+ const u=new SpeechSynthesisUtterance(text);u.lang=byCode[code]?.locale||'en-US';
+ u.rate=Number(state.settings.voiceSpeed)||0.96;u.pitch=1.02;
+ const voices=window.speechSynthesis.getVoices();
+ const wanted=state.settings.deviceVoices?.[code];
+ const selected=voices.find(v=>wanted&&v.voiceURI===wanted);
+ const exact=voices.find(v=>v.lang?.toLowerCase()===u.lang.toLowerCase());
+ const similar=voices.find(v=>v.lang?.toLowerCase().startsWith(code.toLowerCase()+'-'));
+ if(selected||exact||similar)u.voice=selected||exact||similar;
+ u.onstart=()=>{state.speaking=true;$('voiceHint').textContent='Your device voice is speaking · synthetic audio';};
+ u.onend=u.onerror=()=>{state.speaking=false;if(state.streaming)$('voiceHint').textContent='Switch between your three languages naturally.';};
+ window.speechSynthesis.speak(u);
+}
 function renderFeed(){const feed=$('conversationFeed');feed.replaceChildren();if(!state.history.length){const empty=make('div','empty-feed');empty.append(make('span','empty-star','✳'),make('strong',null,'Your conversation begins here.'),make('p',null,'Start speaking above, or try a mixed-language sentence below.'));feed.append(empty);return;}
  for(const turn of state.history){const block=make('div','turn');block.append(make('div','turn-label','YOU · '+new Date(turn.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})),make('p',null,turn.source));block.append(make('div','turn-translation',turn.translation));feed.append(block);if(turn.reply){const ai=make('div','turn ai');ai.append(make('div','turn-label',`TRIFLOW · ${languageName(turn.replyLanguage)}`),make('p',null,turn.reply));if(turn.note)ai.append(make('div','turn-tip',`✧ ${turn.note}`));const replay=make('button','replay-voice','♫ Play voice');replay.type='button';replay.addEventListener('click',()=>speak(turn.reply,turn.replyLanguage));ai.append(replay);feed.append(ai);}else if(turn.note){const tip=make('div','turn ai');tip.append(make('div','turn-label','LANGUAGE COACH'),make('p',null,turn.note));feed.append(tip);}}
  feed.scrollTop=feed.scrollHeight;}
@@ -220,10 +261,10 @@ function renderPhrases(){const list=$('phraseList');list.replaceChildren();const
 async function copyText(text){if(!text){toast('Nothing to copy yet.');return;}try{await navigator.clipboard.writeText(text);toast('Copied to clipboard.');}catch{toast('Clipboard unavailable.');}}
 function openSettings(){if(state.streaming){toast('Finish your live session before changing languages.');return;}const {languages,speakReplies,livePreviews}=state.settings;languages.forEach((v,i)=>$('lang'+(i+1)).value=v);populateReply();$('speakReplies').checked=speakReplies;$('livePreviews').checked=livePreviews;$('voiceSpeed').value=String(state.settings.voiceSpeed);$('speechEngine').value=state.settings.speechEngine;$('settingsDialog').showModal();}
 function registerEvents(){document.querySelectorAll('[data-view]').forEach(x=>x.addEventListener('click',()=>showView(x.dataset.view)));for(const id of ['editLanguages','settingsButton'])$(id).addEventListener('click',openSettings);
- $('micButton').addEventListener('click',()=>state.streaming?stopAudio().catch(()=>{}):startAudio());
+ $('micButton').addEventListener('click',()=>{if(state.streaming){trackTelemetry('voice_stopped');stopAudio().catch(()=>{});}else{trackTelemetry('voice_started');startAudio();}});
  $('targetLanguage').addEventListener('change',event=>{state.settings.target=event.target.value;settingsChange();if(state.sampleActive)runSampleChallenge();else showTranslation('','Translation target updated. Say something new.');});
  document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{state.settings.mode=b.dataset.mode;settingsChange();}));
- $('copyTranslation').addEventListener('click',()=>copyText(state.lastTranslation||state.translatedText));$('savePhrase').addEventListener('click',savePhrase);$('listenTranslation').addEventListener('click',()=>speak(state.lastTranslation||state.translatedText,state.settings.target));$('sampleChallenge').addEventListener('click',runSampleChallenge);$('newSession').addEventListener('click',newSession);$('exportSession').addEventListener('click',exportSession);
+ $('copyTranslation').addEventListener('click',()=>copyText(state.lastTranslation||state.translatedText));$('savePhrase').addEventListener('click',savePhrase);$('listenTranslation').addEventListener('click',()=>speak(state.lastTranslation||state.translatedText,state.settings.target));$('sampleChallenge').addEventListener('click',()=>{trackTelemetry('sample_preview');runSampleChallenge();});$('newSession').addEventListener('click',newSession);$('exportSession').addEventListener('click',()=>{trackTelemetry('session_exported');exportSession();});
  $('composeForm').addEventListener('submit',e=>{e.preventDefault();const text=trim($('typedInput').value);if(!text)return;$('typedInput').value='';queueTurn(text,true);});
  $('settingsForm').addEventListener('submit',e=>{if(e.submitter?.value==='cancel')return;const languages=[$('lang1').value,$('lang2').value,$('lang3').value];if(new Set(languages).size!==3){e.preventDefault();toast('Please choose three different languages.');return;}state.settings.languages=languages;state.settings.replyPreference=$('replyPreference').value;state.settings.speakReplies=$('speakReplies').checked;state.settings.livePreviews=$('livePreviews').checked;state.settings.voiceSpeed=Number($('voiceSpeed').value);state.settings.speechEngine=$('speechEngine').value;settingsChange();renderConfig();toast('Your language studio is updated.');});
  $('aboutButton').addEventListener('click',()=>$('aboutDialog').showModal());$('aboutClose').addEventListener('click',()=>$('aboutDialog').close());$('aboutDone').addEventListener('click',()=>$('aboutDialog').close());
@@ -231,6 +272,127 @@ function registerEvents(){document.querySelectorAll('[data-view]').forEach(x=>x.
  document.querySelectorAll('[data-prompt]').forEach(b=>b.addEventListener('click',()=>{$('typedInput').value=b.dataset.prompt;$('typedInput').focus();toast('Try sending it to experience multilingual understanding.');}));
  $('clearHistory').addEventListener('click',()=>{if(!confirm('Clear all locally saved session history?'))return;store(SESSIONS_KEY,[]);renderSessions();});
  $('clearPhrases').addEventListener('click',()=>{if(!confirm('Clear all saved phrases on this device?'))return;store(PHRASES_KEY,[]);renderPhrases();});
- window.addEventListener('pagehide',()=>{try{state.stream?.getTracks().forEach(t=>t.stop());state.socket?.close();}catch{}});
+ registerExperienceEvents();window.addEventListener('pagehide',()=>{try{state.stream?.getTracks().forEach(t=>t.stop());state.socket?.close();stopVoicePlayback();}catch{}});
 }
+
+/* Premium voice selection, opt-in product analytics and the Flow in-app guide. */
+const VISITOR_KEY='triflow_anonymous_visitor_v1';
+const visitorId=(()=>{let id=load(VISITOR_KEY,null);if(!id||!/^[a-zA-Z0-9_-]{10,70}$/.test(id)){id=crypto.randomUUID();store(VISITOR_KEY,id);}return id;})();
+let flowRating=null,flowBusy=false,flowMessages=[],flowPreviousFocus=null;
+function trackTelemetry(event,provider=''){
+ if(!state.settings.telemetryConsent||!state.sessionReady)return;
+ fetch('/api/events',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({consent:true,visitor:visitorId,event,languages:state.settings.languages,mode:state.settings.mode,provider})}).catch(()=>{});
+}
+async function initializeExperience(){
+ try{
+  const response=await fetch('/api/experience/config',{credentials:'same-origin',cache:'no-store'});
+  if(response.ok)state.experience=await response.json();
+ }catch{}
+ $('voiceEngine').value=state.settings.voiceEngine;
+ $('flowUsageConsent').checked=state.settings.telemetryConsent;
+ renderVoicePicker();
+ if('speechSynthesis' in window)window.speechSynthesis.addEventListener('voiceschanged',renderVoicePicker);
+ trackTelemetry('app_open');
+}
+function renderVoicePicker(){
+ const select=$('voicePersona'),lang=state.settings.target,mode=state.settings.voiceEngine;
+ if(!$('voiceEngine'))return;
+ $('voiceEngine').value=mode;
+ const studio=mode==='studio',available=state.experience.voiceCatalog?.[lang]||[];
+ select.replaceChildren();
+ if(studio){
+  for(const item of available)select.add(new Option(item[2],item[0]));
+  const saved=state.settings.voiceProfiles?.[lang];
+  if(available.length)select.value=available.some(x=>x[0]===saved)?saved:available[0][0];
+  if(!available.length)select.add(new Option('Not supported for this language','system'));
+  $('voiceAvailability').textContent=state.experience.neuralVoicesReady?'Neural voices ready':'Voice service offline';
+  $('studioVoiceCaption').textContent=available.length?'Natural AI-generated speech · cloud processing · device playback is always available as a fallback.':'Studio voices are not available in '+languageName(lang)+'. Free device speech will play instead.';
+ }else{
+  select.add(new Option('Auto · best device voice','system'));
+  const voices='speechSynthesis' in window?window.speechSynthesis.getVoices().filter(v=>v.lang?.toLowerCase().startsWith(lang.toLowerCase())):[];
+  for(const voice of voices.slice(0,25))select.add(new Option(voice.name+' · '+voice.lang,voice.voiceURI));
+  select.value=voices.some(x=>x.voiceURI===state.settings.deviceVoices?.[lang])?state.settings.deviceVoices[lang]:'system';
+  $('voiceAvailability').textContent='Free · on this device';
+  $('studioVoiceCaption').textContent='Device voices are free and available offline on supported devices. Quality depends on your browser and installed voices.';
+ }
+ select.disabled=studio&&!available.length;
+ const studioStatus=$('studioVoicePanel');
+ if(studioStatus)studioStatus.classList.toggle('studio-unavailable',studio&&!state.experience.neuralVoicesReady);
+}
+function setFlowTab(tab){
+ for(const button of document.querySelectorAll('[data-flow-tab]')){
+  const selected=button.dataset.flowTab===tab;button.classList.toggle('active',selected);button.setAttribute('aria-selected',String(selected));
+ }
+ $('flowAssistantPane').hidden=tab!=='assistant';$('flowFeedbackPane').hidden=tab!=='feedback';
+}
+function openFlow(tab='assistant'){
+ flowPreviousFocus=document.activeElement;
+ $('flowDrawer').hidden=false;$('flowBackdrop').hidden=false;document.body.classList.add('flow-open');setFlowTab(tab);
+ (tab==='assistant'?$('flowInput'):$('flowFeedbackMessage')).focus();
+ trackTelemetry('help_opened');
+}
+function closeFlow(){
+ $('flowDrawer').hidden=true;$('flowBackdrop').hidden=true;document.body.classList.remove('flow-open');
+ if(flowPreviousFocus&&flowPreviousFocus.isConnected)flowPreviousFocus.focus();
+}
+function addFlowMessage(role,text){
+ const row=make('div','flow-msg '+role);
+ if(role==='assistant')row.append(make('span','flow-msg-icon','✦'));
+ row.append(make('p',null,String(text)));
+ $('flowConversation').append(row);
+ $('flowConversation').scrollTop=$('flowConversation').scrollHeight;
+}
+async function askFlow(message){
+ const question=trim(message);if(!question||flowBusy)return;
+ flowBusy=true;$('flowInput').disabled=true;
+ addFlowMessage('user',question);
+ try{
+  const result=await api('/api/support',{message:question,history:flowMessages.slice(-6)});
+  const reply=trim(result.answer)||'I could not answer that. Please try a simpler question.';
+  addFlowMessage('assistant',reply);
+  flowMessages.push({role:'user',content:question},{role:'assistant',content:reply});
+  flowMessages=flowMessages.slice(-10);
+ }catch(error){addFlowMessage('assistant','I am having trouble connecting. You can still change your languages in Settings or send feedback here.');}
+ finally{flowBusy=false;$('flowInput').disabled=false;$('flowInput').focus();}
+}
+function updateFlowStars(){
+ for(const button of document.querySelectorAll('[data-score]')){
+  const selected=flowRating!==null&&Number(button.dataset.score)<=flowRating;
+  button.textContent=selected?'★':'☆';button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(Number(button.dataset.score)===flowRating));
+ }
+}
+async function submitFlowFeedback(event){
+ event.preventDefault();
+ const comment=trim($('flowFeedbackMessage').value);
+ if(comment.length<8){$('flowFeedbackStatus').textContent='Please add a little more detail (at least 8 characters).';return;}
+ const button=$('flowFeedbackSubmit');button.disabled=true;$('flowFeedbackStatus').textContent='Sending your feedback securely…';
+ try{
+  const result=await api('/api/feedback',{visitor:visitorId,category:$('flowFeedbackCategory').value,rating:flowRating,comment,alias:trim($('flowFeedbackAlias').value),languages:state.settings.languages});
+  $('flowFeedbackStatus').textContent='Thank you. Your feedback is recorded · '+result.receipt;
+  $('flowFeedbackMessage').value='';flowRating=null;updateFlowStars();trackTelemetry('feedback_sent');
+ }catch(error){$('flowFeedbackStatus').textContent='Feedback could not be sent: '+error.message;}
+ finally{button.disabled=false;}
+}
+function registerExperienceEvents(){
+ for(const id of ['flowHelpTop','flowHelpSidebar','flowFloatingHelp'])$(id).addEventListener('click',()=>openFlow());
+ $('flowClose').addEventListener('click',closeFlow);$('flowBackdrop').addEventListener('click',closeFlow);
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('flowDrawer').hidden)closeFlow();});
+ for(const btn of document.querySelectorAll('[data-flow-tab]'))btn.addEventListener('click',()=>setFlowTab(btn.dataset.flowTab));
+ for(const btn of document.querySelectorAll('[data-flow-prompt]'))btn.addEventListener('click',()=>{setFlowTab('assistant');askFlow(btn.dataset.flowPrompt);});
+ $('flowForm').addEventListener('submit',e=>{e.preventDefault();const msg=trim($('flowInput').value);if(!msg)return;$('flowInput').value='';askFlow(msg);});
+ $('flowFeedbackForm').addEventListener('submit',submitFlowFeedback);
+ for(const btn of document.querySelectorAll('[data-score]'))btn.addEventListener('click',()=>{flowRating=Number(btn.dataset.score);updateFlowStars();});
+ $('flowUsageConsent').addEventListener('change',e=>{state.settings.telemetryConsent=Boolean(e.target.checked);store(CONFIG_KEY,state.settings);if(state.settings.telemetryConsent)trackTelemetry('app_open');});
+ $('voiceEngine').addEventListener('change',e=>{state.settings.voiceEngine=e.target.value;store(CONFIG_KEY,state.settings);renderVoicePicker();trackTelemetry('setting_changed');});
+ $('voicePersona').addEventListener('change',e=>{
+  const code=state.settings.target;if(state.settings.voiceEngine==='studio')state.settings.voiceProfiles[code]=e.target.value;
+  else state.settings.deviceVoices[code]=e.target.value;
+  store(CONFIG_KEY,state.settings);trackTelemetry('setting_changed');
+ });
+ $('previewStudioVoice').addEventListener('click',()=>{
+  const language=state.settings.target;const sample={en:'Hi! I am Flow. Speak freely, and let your languages find their rhythm.',es:'Hola, soy Flow. Habla con naturalidad y disfruta de cada idioma.',fr:'Bonjour, je suis Flow. Parlons naturellement, dans les langues que tu aimes.',de:'Hallo, ich bin Flow. Sprich ganz natürlich mit mir.',it:'Ciao, sono Flow. Parliamo insieme con naturalezza.',pt:'Olá, eu sou Flow. Vamos conversar naturalmente.',ja:'こんにちは、Flowです。いっしょに自然に話しましょう。'};
+  speak(sample[language]||'Hello, welcome to TriFlow.',language);
+ });
+}
+
 initialize();
