@@ -4,7 +4,7 @@
  */
 const SUPPORTED = new Set('af ar be bn bs bg ca zh-HK zh hr cs da nl en et fi fr gl de el gu he hi hu id it ja kn ko lv lt mk ms mr no fa pl pt ro ru sr sk sl es sv tl ta te th tr uk vi xh zu'.split(' '));
 const DEFAULT_TRIO = ['en', 'es', 'fr'];
-const ASSET_MIME = { '/': 'text/html; charset=utf-8', '/index.html': 'text/html; charset=utf-8', '/styles.css': 'text/css; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8', '/audio-worklet.js': 'text/javascript; charset=utf-8', '/manifest.webmanifest':'application/manifest+json', '/favicon.svg':'image/svg+xml', '/sw.js':'text/javascript; charset=utf-8' };
+const ASSET_MIME = { '/': 'text/html; charset=utf-8', '/index.html': 'text/html; charset=utf-8', '/styles.css': 'text/css; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8', '/audio-worklet.js': 'text/javascript; charset=utf-8', '/manifest.webmanifest':'application/manifest+json', '/favicon.svg':'image/svg+xml', '/sw.js':'text/javascript; charset=utf-8', '/admin.html':'text/html; charset=utf-8', '/admin.js':'text/javascript; charset=utf-8' };
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { ...JSON_HEADERS, ...headers } });
 function readCookie(header, name) { const hit = String(header || '').split(';').map(x => x.trim()).find(x => x.startsWith(name + '=')); return hit ? hit.slice(name.length + 1) : ''; }
