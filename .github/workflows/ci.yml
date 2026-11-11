@@ -28,3 +28,22 @@ jobs:
           diff -u /tmp/triflow-build.sha /tmp/triflow-rebuild.sha
       - name: Test provider contracts and HTTP endpoints
         run: node --test tests/*.test.mjs
+      - name: Install headless browser for UI E2E
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Verify desktop and mobile product flow
+        env:
+          SESSION_SECRET: local-browser-smoke-secret-longer-than-thirty-two-chars
+        run: |
+          PORT=3100 bun index.ts > /tmp/triflow-browser-server.log 2>&1 &
+          for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:3100/api/health > /dev/null; then break; fi; sleep 1; done
+          node tests/browser-smoke.mjs
+      - name: Upload UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: triflow-browser-qa-screenshots
+          path: qa-screenshots/
+          if-no-files-found: ignore
+
