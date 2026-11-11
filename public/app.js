@@ -337,7 +337,7 @@ function closeFlow(){
  if(flowPreviousFocus&&flowPreviousFocus.isConnected)flowPreviousFocus.focus();
 }
 function addFlowMessage(role,text){
- const row=make('div','flow-msg '+role);
+ const row=make('div','flow-msg '+(role==='assistant'?'ai':'user'));
  if(role==='assistant')row.append(make('span','flow-msg-icon','✦'));
  row.append(make('p',null,String(text)));
  $('flowConversation').append(row);
