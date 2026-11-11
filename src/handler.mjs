@@ -88,7 +88,11 @@ export function createHandler({env=process.env,assets={},fetchImpl=fetch,nowFn=D
         form.append('file',new Blob([audio],{type:rawType}),`triflow-audio.${mimeExt[rawType]}`);
         form.append('model',env.OPENAI_TRANSCRIBE_MODEL||'gpt-transcribe');
         form.append('response_format','json');
-        form.append('prompt','Transcribe the actual audio in its original spoken languages. Preserve natural code-switching within a sentence. Do not translate or invent speech.');
+        const expectedCodes=String(req.headers.get('x-triflow-languages')||'').split(',').map(x=>x.trim());
+        const expectedLanguages=normalizeLanguages(expectedCodes);
+        const languageLabels={en:'English',es:'Spanish',fr:'French',fa:'Persian',de:'German',it:'Italian',pt:'Portuguese',ar:'Arabic',zh:'Chinese',ja:'Japanese',ko:'Korean'};
+        const expectedText=expectedLanguages?' The speaker may switch among '+expectedLanguages.map(x=>languageLabels[x]||x).join(', ')+' within the same sentence. Recognize each language in its own script rather than translating it.':'';
+        form.append('prompt','Transcribe the actual audio in its original spoken languages. Preserve natural code-switching within a sentence. Do not translate or invent speech.'+expectedText);
         const provider=await fetchImpl('https://api.openai.com/v1/audio/transcriptions',{
           method:'POST',
           headers:{Authorization:`Bearer ${openAiApiKey}`},

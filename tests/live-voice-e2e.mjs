@@ -47,7 +47,7 @@ report.transcript=finalTexts.join(' ').trim();
 report.languages=[...languageTags];
 // Control: run the complete 3-language audio through an independent real STT provider.
 const wav=Buffer.alloc(44+audio.length);wav.write('RIFF',0);wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(16000,24);wav.writeUInt32LE(32000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(audio.length,40);Buffer.from(audio).copy(wav,44);
-try{const openai=await fetch(url+'/api/transcribe',{method:'POST',headers:{Origin:url,Cookie:cookie,'content-type':'audio/wav'},body:wav,signal:AbortSignal.timeout(30000)});const text=await openai.json().catch(()=>({}));report.openaiTranscript=String(text.text||'');report.openaiStatus=openai.status;}catch(e){report.errors.push('OpenAI full-clip comparison failed')}
+try{const openai=await fetch(url+'/api/transcribe',{method:'POST',headers:{Origin:url,Cookie:cookie,'content-type':'audio/wav','x-triflow-languages':'en,es,fr'},body:wav,signal:AbortSignal.timeout(30000)});const text=await openai.json().catch(()=>({}));report.openaiTranscript=String(text.text||'');report.openaiStatus=openai.status;}catch(e){report.errors.push('OpenAI full-clip comparison failed')}
 if(report.transcript.length>=6){
  const response=await fetch(url+'/api/turn',{method:'POST',headers:{Origin:url,Cookie:cookie,'content-type':'application/json'},body:JSON.stringify({languages:['en','es','fr'],target:'en',mode:'interpreter',text:report.transcript}),signal:AbortSignal.timeout(26000)});
  const result=await response.json().catch(()=>({}));report.translation=String(result.translation||'');report.translationStatus=response.status;

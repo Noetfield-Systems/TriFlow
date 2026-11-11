@@ -151,7 +151,7 @@ async function startOpenAIAudio(){
     const chunk=event.data;
     if(!chunk||chunk.size<1000||state.stopRequested)return;
     state.openaiQueue=state.openaiQueue.then(async()=>{
-     const response=await fetch('/api/transcribe',{method:'POST',headers:{'Content-Type':chunk.type||'audio/webm'},credentials:'same-origin',body:chunk});
+     const response=await fetch('/api/transcribe',{method:'POST',headers:{'Content-Type':chunk.type||'audio/webm','X-TriFlow-Languages':state.settings.languages.join(',')},credentials:'same-origin',body:chunk});
      const body=await response.json().catch(()=>({}));
      if(!response.ok)throw Error(body.error||'Transcription unavailable');
      const utterance=trim(body.text);

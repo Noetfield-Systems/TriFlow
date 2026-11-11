@@ -68,13 +68,14 @@ test('OpenAI transcription fallback verifies actual uploaded audio body and retu
   assert.match(url,/\/v1\/audio\/transcriptions$/);
   assert.equal(init.headers.Authorization,'Bearer staging-test-value');
   assert.equal(init.body.get('model'),'gpt-transcribe');
+  assert.match(init.body.get('prompt'),/English, Spanish, French/);
   assert.equal(init.body.get('file').name,'triflow-audio.webm');
   checked=true;return Response.json({text:'I think que podemos parler demain'});
  };
  const h=app({'OpenAI-API':'staging-test-value'},mock);
  const config=await (await request(h,'/api/config')).json();assert.equal(config.openAITranscribeReady,true);
  const cookie=await signedCookie(h);
- const r=await h(new Request(origin+'/api/transcribe',{method:'POST',headers:{origin,cookie,'content-type':'audio/webm'},body:new Uint8Array(2000)}));
+ const r=await h(new Request(origin+'/api/transcribe',{method:'POST',headers:{origin,cookie,'content-type':'audio/webm','x-triflow-languages':'en,es,fr'},body:new Uint8Array(2000)}));
  assert.equal(r.status,200);assert.equal((await r.json()).text,'I think que podemos parler demain');assert.equal(checked,true);
  const bad=await h(new Request(origin+'/api/transcribe',{method:'POST',headers:{origin,cookie,'content-type':'text/plain'},body:new Uint8Array(2000)}));assert.equal(bad.status,415);
 });

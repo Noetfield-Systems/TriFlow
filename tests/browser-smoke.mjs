@@ -9,6 +9,8 @@ const problems=[];
 async function run(name,viewport){
  const page=await browser.newPage({viewport,deviceScaleFactor:1,hasTouch:viewport.width<500,isMobile:viewport.width<500});
  page.on('pageerror',e=>problems.push(name+' JS: '+e.message));
+ // UI test: simulate configured language provider while leaving the real API and signed session in place.
+ await page.route('**/api/config',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({speechReady:false,openAITranscribeReady:false,aiReady:true,accessCodeRequired:false,gateReady:true})}));
  const response=await page.goto(base,{waitUntil:'domcontentloaded',timeout:30000});
  assert.equal(response.status(),200,name+' HTTP');
  await page.locator('#micButton').waitFor({state:'visible'});
