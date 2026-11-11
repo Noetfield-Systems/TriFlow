@@ -18,7 +18,7 @@ const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fa
 const store=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));}catch{toast('Device storage is unavailable. Export your session to keep it.');}};
 const defaults={languages:['en','es','fr'],target:'en',replyPreference:'auto',mode:'conversation',speakReplies:true,livePreviews:true,voiceSpeed:0.96,speechEngine:'auto',freeLanguage:'en'};
 const parsed=load(CONFIG_KEY,{});
-const state={settings:{...defaults,...parsed},config:{speechReady:false,aiReady:false,accessCodeRequired:false},sessionReady:false,streaming:false,starting:false,speaking:false, socket:null,browserSpeech:null,activeSpeechProvider:null,stream:null,audioContext:null,sourceNode:null,processor:null,minuteTicker:null,keepAlive:null,startedAt:0,sessionId:crypto.randomUUID(),history:[],currentText:'',translatedText:'',lastSource:'',lastTranslation:'',partialTimer:null,previewSerial:0,turnQueue:Promise.resolve(),lastPreviewText:'',uncommitted:[],lastFinalAt:0,stopRequested:false,openaiRecorder:null,openaiTimer:null,openaiQueue:Promise.resolve(),view:'live',wordLanguages:[],sampleActive:false};
+const state={settings:{...defaults,...parsed},config:{speechReady:false,aiReady:false,accessCodeRequired:false},sessionReady:false,streaming:false,starting:false,speaking:false, socket:null,browserSpeech:null,activeSpeechProvider:null,stream:null,audioContext:null,sourceNode:null,processor:null,minuteTicker:null,keepAlive:null,startedAt:0,sessionId:crypto.randomUUID(),history:[],currentText:'',translatedText:'',lastSource:'',lastTranslation:'',partialTimer:null,previewSerial:0,turnQueue:Promise.resolve(),lastPreviewText:'',uncommitted:[],lastFinalAt:0,stopRequested:false,fallingBack:false,openaiRecorder:null,openaiTimer:null,openaiQueue:Promise.resolve(),view:'live',wordLanguages:[],sampleActive:false};
 const trim=x=>String(x||'').trim();
 let toastTimer;
 function toast(message){const node=$('toast');node.textContent=message;node.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.classList.remove('show'),4200);}
@@ -91,18 +91,40 @@ function getDeepgramUrl(){const q=new URLSearchParams({model:'nova-3',language:'
 async function startAudio(){if(state.starting||state.streaming)return;if(useBrowserSpeech())return startBrowserAudio();if(!state.config.speechReady){if(state.config.openAITranscribeReady)return startOpenAIAudio();toast('Automatic three-language recognition is not configured. Choose Free browser mode.');return;}if(!state.sessionReady){if(!await initSession())return;}if(!navigator.mediaDevices?.getUserMedia||!window.AudioWorkletNode){toast('This browser does not support live microphone audio. Use Chrome or Safari over HTTPS.');return;}
  state.starting=true;state.stopRequested=false;setMicState('ready','Connecting securely…','Preparing your multilingual stream');$('micButton').disabled=true;
  try{
-  const credentials=await api('/api/stt-token',{});
   const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});state.stream=stream;
-  const socket=new WebSocket(getDeepgramUrl(),['bearer',credentials.access_token]);socket.binaryType='arraybuffer';state.socket=socket;
-  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Speech connection timed out.')),12000);socket.addEventListener('open',()=>{clearTimeout(timer);resolve();},{once:true});socket.addEventListener('error',()=>{clearTimeout(timer);reject(Error('Speech service connection failed.'));},{once:true});});
+  const upstreamUrl=new URL(getDeepgramUrl());const secure=location.protocol==='https:'?'wss:':'ws:';
+  const socket=new WebSocket(secure+'//'+location.host+'/api/ws/stream'+upstreamUrl.search);
+  socket.binaryType='arraybuffer';state.socket=socket;
+  // Wait for Deepgram itself, not merely the Railway proxy, to accept the stream.
+  await new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>reject(Error('Multilingual speech provider timed out.')),14000);
+    const settle=(error)=>{clearTimeout(timer);socket.removeEventListener('message',message);socket.removeEventListener('error',failed);socket.removeEventListener('close',closed);error?reject(error):resolve();};
+    const message=event=>{try{const m=JSON.parse(event.data);if(m.type==='ProxyReady')settle();else if(m.type==='ProviderError')settle(Error('Deepgram connection was rejected.'));}catch{}};
+    const failed=()=>settle(Error('Speech WebSocket unavailable.'));
+    const closed=()=>settle(Error('Speech service disconnected.'));
+    socket.addEventListener('message',message);socket.addEventListener('error',failed);socket.addEventListener('close',closed);
+  });
   const ctx=new AudioContext({latencyHint:'interactive'});state.audioContext=ctx;await ctx.audioWorklet.addModule('/audio-worklet.js');
   const source=ctx.createMediaStreamSource(stream);const node=new AudioWorkletNode(ctx,'pcm16-processor');state.sourceNode=source;state.processor=node;
   node.port.onmessage=event=>{if(event.data?.type==='pcm'&&socket.readyState===WebSocket.OPEN&&!state.speaking&&socket.bufferedAmount<512*1024){socket.send(event.data.buffer);}if(event.data?.type==='level')setWave(event.data.level);};
   source.connect(node);const silent=ctx.createGain();silent.gain.value=0;node.connect(silent);silent.connect(ctx.destination);await ctx.resume();
   state.activeSpeechProvider='deepgram';state.streaming=true;state.startedAt=Date.now();state.uncommitted=[];state.wordLanguages=[];state.sampleActive=false;renderLanguageEvidence();state.lastFinalAt=0;state.lastPreviewText='';state.previewSerial++;
-  socket.addEventListener('message',e=>{try{handleSpeech(JSON.parse(e.data));}catch(err){console.warn('transcript processing error',err);}});
+  socket.addEventListener('message',e=>{try{
+    const data=JSON.parse(e.data);
+    if(data.type==='ProviderError'){
+      if(state.activeSpeechProvider==='deepgram'&&!state.fallingBack){
+        state.fallingBack=true;toast('Streaming provider unavailable — switching to automatic OpenAI speech.');
+        stopAudio().then(()=>{state.fallingBack=false;if(state.config.openAITranscribeReady)startOpenAIAudio();}).catch(()=>{state.fallingBack=false;});
+      }
+      return;
+    }
+    handleSpeech(data);
+  }catch(err){console.warn('transcript processing error',err);}});
   socket.addEventListener('close',e=>{if(state.streaming){stopAudio().catch(()=>{});if(!e.wasClean)toast('Speech connection ended unexpectedly.');}});
-  socket.addEventListener('error',()=>{if(state.streaming){setMicState('error','Speech connection interrupted','Try starting a new session.');stopAudio().catch(()=>{});}});
+  socket.addEventListener('error',()=>{if(state.streaming&&!state.fallingBack){
+   if(state.config.openAITranscribeReady){state.fallingBack=true;stopAudio().then(()=>{state.fallingBack=false;startOpenAIAudio();}).catch(()=>{state.fallingBack=false;});}
+   else{setMicState('error','Speech connection interrupted','Try starting a new session.');stopAudio().catch(()=>{});}
+ }});
   state.minuteTicker=setInterval(()=>{const seconds=Math.floor((Date.now()-state.startedAt)/1000);$('sessionTimer').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;if(seconds>=15*60){toast('15-minute session limit reached. Start a new session to continue.');stopAudio().catch(()=>{});}},1000);
   state.keepAlive=setInterval(()=>{if(socket.readyState===WebSocket.OPEN&&state.speaking)socket.send(JSON.stringify({type:'KeepAlive'}));},4000);
   setMicState('active','We’re listening. Just speak.','Switch between your three languages naturally.');

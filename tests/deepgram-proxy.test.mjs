@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createSpeechProxy} from '../src/deepgram-proxy.mjs';
+const location='https://triflow.example/api/ws/stream?language_hint=en&language_hint=es&language_hint=fr';
+test('proxy requires signed session and pins exactly three languages',async()=>{
+ const proxy=createSpeechProxy({env:{'Deepgram-api':'server-only-key'},verify:async req=>req.headers.get('cookie')==='signed-session'});
+ const server={upgrade:()=>true};
+ assert.equal((await proxy.upgrade(new Request(location),server)).status,401);
+ assert.equal((await proxy.upgrade(new Request(location+'&language_hint=fa',{headers:{cookie:'signed-session'}}),server)).status,400);
+ assert.equal(await proxy.upgrade(new Request(location,{headers:{cookie:'signed-session'}}),server),undefined);
+});
+test('speech is streamed with server-side API key; browser gets only provider status',async()=>{
+ let upstream,upstreamOptions,upstreamUrl;const events={};
+ const makeUpstream=(url,opts)=>{upstreamUrl=url;upstreamOptions=opts;upstream={readyState:1,sent:[],send(x){this.sent.push(x)},close(){},addEventListener(type,cb){events[type]=cb}};return upstream};
+ const proxy=createSpeechProxy({env:{'Deepgram-api':'private-provider-key'},verify:async()=>true,makeUpstream});
+ let context;
+ const server={upgrade:(req,opts)=>{context=opts.data;return true}};
+ await proxy.upgrade(new Request(location),server);
+ const messages=[];
+ const client={data:context,send:x=>messages.push(x),close:()=>{}};
+ proxy.websocket.open(client);assert.match(upstreamUrl,/language=multi/);
+ assert.equal(upstreamOptions.headers.Authorization,'Token private-provider-key');
+ assert.equal(messages.length,0);
+ events.open();assert.deepEqual(JSON.parse(messages[0]),{type:'ProxyReady',provider:'deepgram-nova-3-multilingual'});
+ const sound=new Uint8Array([0,20,8,4]);
+ proxy.websocket.message(client,sound);
+ assert.equal(upstream.sent.length,1);
+ events.message({data:JSON.stringify({type:'Results',channel:{alternatives:[]}})});
+ assert.doesNotMatch(messages.join(''),'private-provider-key');
+ assert.equal(messages.length,2);
+ proxy.websocket.close(client);
+});
