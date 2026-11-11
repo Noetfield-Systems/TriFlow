@@ -173,6 +173,7 @@ const experience=createExperienceApi({env:Bun.env,fetchImpl:fetch});
 const handler=async (request,server)=>{
  const requestPath=new URL(request.url).pathname;
  if(requestPath==='/api/ws/stream')return speechProxy.upgrade(request,server);
+ if(requestPath==='/admin'&&(request.method==='GET'||request.method==='HEAD'))return new Response(assets['/admin.html'],{headers:legalHeaders});
  if(['/api/voice','/api/support','/api/feedback','/api/events','/api/admin/insights'].includes(requestPath)||requestPath==='/api/experience/config'){
   if(!acceptedOrigin(request,Bun.env))return new Response(JSON.stringify({error:'ORIGIN_DENIED'}),{status:403,headers:{'content-type':'application/json'}});
   const sessionReady=await validateToken(Bun.env.SESSION_SECRET||'',readCookie(request.headers.get('cookie'),'triflow_session'),Date.now());
