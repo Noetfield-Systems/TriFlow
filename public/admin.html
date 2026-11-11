@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#0c101b"/><title>TriFlow · Founder insights</title><link rel="icon" href="/favicon.svg"/><link rel="stylesheet" href="/styles.css"/></head>
+<body class="tf-admin-body">
+<div class="tf-admin-shell">
+ <header class="tf-admin-top"><a class="tf-admin-brand" href="/">✦ <strong>tri<span>flow</span></strong> <small>/ Insights</small></a><a href="/" class="tf-admin-back">↖ Back to studio</a></header>
+ <div class="tf-admin-hero"><span class="tf-eyebrow">PRIVATE · FOUNDER CONSOLE</span><h1>Understand the experience.</h1><p>Respectful insights, product adoption, and feedback from real language learners. No recorded audio, transcripts, or support questions are shown here.</p></div>
+ <form id="tfAdminUnlock" class="tf-admin-auth"><label for="tfAdminKey">ADMIN ACCESS</label><div class="tf-admin-auth-row"><input id="tfAdminKey" type="password" required autocomplete="off" placeholder="Paste the admin token from Railway Variables"/><button type="submit">View insights ↗</button></div><p id="tfAdminStatus" role="status">The token stays in this browser tab only and is never saved.</p></form>
+ <main id="tfAdminContent" hidden>
+  <div class="tf-admin-toolbar"><div><span class="tf-eyebrow">LAST 30 DAYS</span><h2>Product pulse</h2></div><button id="tfAdminRefresh" type="button">↻ Refresh</button></div>
+  <div class="tf-admin-metrics"><article><span>Opt-in product events</span><strong id="tfEvents">—</strong><small>Anonymous feature usage</small></article><article><span>Participating visitors</span><strong id="tfVisitors">—</strong><small>Only users who enabled analytics</small></article><article><span>Feedback received</span><strong id="tfFeedbackCount">—</strong><small>Submitted intentionally</small></article></div>
+  <section class="tf-admin-panel"><header><div><span class="tf-eyebrow">BEHAVIOUR & ADOPTION</span><h3>What people use</h3></div></header><div id="tfEventBars" class="tf-admin-event-bars"><p>No anonymous events recorded yet.</p></div></section>
+  <section class="tf-admin-panel"><header><div><span class="tf-eyebrow">PRODUCT VOICE</span><h3>Feedback inbox</h3></div><button id="tfExportFeedback" type="button">↓ Export CSV</button></header><div id="tfFeedbackList" class="tf-admin-feedback-list"><p>No feedback yet.</p></div></section>
+  <p class="tf-admin-disclaimer">No individual listening histories are tracked. Anonymous usage events are retained for 30 days; submitted feedback for up to 180 days. The activity chart is opt-in only.</p>
+ </main>
+</div><script type="module" src="/admin.js"></script></body></html>
