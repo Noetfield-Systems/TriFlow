@@ -65,6 +65,7 @@ export function createSpeechProxy({env,verify,now=Date.now,makeUpstream=(url,opt
    if(size>262144){try{ws.close(1009,'Payload too large')}catch{};return;}
    if(typeof message!=='string')d.bytes+=size;
    if(d.bytes>maxBytes){try{ws.close(1000,'Session audio limit')}catch{};return;}
+   if(typeof message==='string'&&message.includes('"Finalize"'))safeSend(ws,{type:'ProxyDiagnostics',audioBytes:d.bytes});
    if(!d.ready||d.upstream?.readyState!==1)return;
    try{d.upstream.send(message)}catch{try{ws.close(1011,'Audio forwarding failed')}catch{}}
   },

@@ -3,7 +3,7 @@
 import {readFile,writeFile} from 'node:fs/promises';
 const url='https://triflow-app-production.up.railway.app';
 const time=ms=>new Promise(r=>setTimeout(r,ms));
-const report={scenario:'synthetic English-Spanish-French voice in ONE continuous stream',checked:new Date().toISOString(),websocketOpen:false,providerReady:false,transcript:'',languages:[],translation:'',openaiTranscript:'',allCandidates:[],errors:[]};
+const report={scenario:'synthetic English-Spanish-French voice in ONE continuous stream',checked:new Date().toISOString(),websocketOpen:false,providerReady:false,transcript:'',languages:[],translation:'',openaiTranscript:'',allCandidates:[],errors:[],forwardedBytes:0};
 const session=await fetch(url+'/api/session',{method:'POST',headers:{Origin:url,'content-type':'application/json'},body:'{}'});
 if(!session.ok)throw Error('Session HTTP '+session.status);
 const cookie=(session.headers.get('set-cookie')||'').split(';')[0];
@@ -23,6 +23,7 @@ ws.addEventListener('message',e=>{
  try{
   const x=JSON.parse(e.data);
   if(x.type==='ProxyReady'){isReady=true;report.providerReady=true;return;}
+  if(x.type==='ProxyDiagnostics'){report.forwardedBytes=Number(x.audioBytes)||0;return;}
   if(x.type==='ProviderError'){report.errors.push(x.error);errorResolve();return;}
   if(x.type!=='Results')return;
   const alt=x.channel?.alternatives?.[0];if(!alt)return;

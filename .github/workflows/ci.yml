@@ -27,7 +27,8 @@ jobs:
           sha256sum index.ts > /tmp/triflow-rebuild.sha
           diff -u /tmp/triflow-build.sha /tmp/triflow-rebuild.sha
       - name: Test provider contracts and HTTP endpoints
-        run: node --test tests/*.test.mjs
+        timeout-minutes: 2
+        run: node --test --test-reporter=spec tests/*.test.mjs
       - name: Install headless browser for UI E2E
         run: |
           npm install --no-save playwright
